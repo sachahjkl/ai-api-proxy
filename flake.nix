@@ -25,7 +25,7 @@
       pkgs = nixpkgs.legacyPackages.${system};
       src = pkgs.lib.fileset.toSource {
         root = ./.;
-        fileset = pkgs.lib.fileset.unions [./go.mod ./main.go ./main_test.go];
+        fileset = pkgs.lib.fileset.unions [./go.mod ./main.go ./main_test.go ./oauth.go ./oauth_test.go];
       };
       package = pkgs.buildGoModule {
         pname = "codex-proxy";
@@ -137,6 +137,10 @@
             default = null;
             description = "File that contains the shared proxy token.";
           };
+          oauthCredentialFile = lib.mkOption {
+            type = lib.types.path;
+            description = "File that contains the seed ChatGPT OAuth credential.";
+          };
         };
 
         config = lib.mkIf cfg.enable {
@@ -147,38 +151,42 @@
             wantedBy = ["multi-user.target"];
             environment = {
               LISTEN_ADDR = cfg.listenAddress;
+              OAUTH_STATE_FILE = "/var/lib/codex-proxy/oauth.json";
               UPSTREAM_URL = cfg.upstreamUrl;
             };
-            serviceConfig =
-              {
-                DynamicUser = true;
-                ExecStart = lib.getExe cfg.package;
-                LockPersonality = true;
-                MemoryDenyWriteExecute = true;
-                NoNewPrivileges = true;
-                PrivateDevices = true;
-                PrivateTmp = true;
-                ProtectClock = true;
-                ProtectControlGroups = true;
-                ProtectHome = true;
-                ProtectHostname = true;
-                ProtectKernelLogs = true;
-                ProtectKernelModules = true;
-                ProtectKernelTunables = true;
-                ProtectSystem = "strict";
-                Restart = "on-failure";
-                RestrictAddressFamilies = ["AF_INET" "AF_INET6"];
-                RestrictNamespaces = true;
-                RestrictRealtime = true;
-                RestrictSUIDSGID = true;
-                SystemCallArchitectures = "native";
-                SystemCallFilter = ["@system-service" "~@privileged" "~@resources"];
-                UMask = "0077";
-              }
-              // lib.optionalAttrs (cfg.proxyTokenFile != null) {
-                Environment = "PROXY_TOKEN_FILE=%d/proxy-token";
-                LoadCredential = "proxy-token:${cfg.proxyTokenFile}";
-              };
+            serviceConfig = {
+              DynamicUser = true;
+              ExecStart = lib.getExe cfg.package;
+              LockPersonality = true;
+              MemoryDenyWriteExecute = true;
+              NoNewPrivileges = true;
+              PrivateDevices = true;
+              PrivateTmp = true;
+              ProtectClock = true;
+              ProtectControlGroups = true;
+              ProtectHome = true;
+              ProtectHostname = true;
+              ProtectKernelLogs = true;
+              ProtectKernelModules = true;
+              ProtectKernelTunables = true;
+              ProtectSystem = "strict";
+              Restart = "on-failure";
+              RestrictAddressFamilies = ["AF_INET" "AF_INET6"];
+              RestrictNamespaces = true;
+              RestrictRealtime = true;
+              RestrictSUIDSGID = true;
+              StateDirectory = "codex-proxy";
+              StateDirectoryMode = "0700";
+              SystemCallArchitectures = "native";
+              SystemCallFilter = ["@system-service" "~@privileged" "~@resources"];
+              UMask = "0077";
+              Environment =
+                ["OAUTH_CREDENTIAL_FILE=%d/oauth-credential"]
+                ++ lib.optional (cfg.proxyTokenFile != null) "PROXY_TOKEN_FILE=%d/proxy-token";
+              LoadCredential =
+                ["oauth-credential:${cfg.oauthCredentialFile}"]
+                ++ lib.optional (cfg.proxyTokenFile != null) "proxy-token:${cfg.proxyTokenFile}";
+            };
           };
         };
       };

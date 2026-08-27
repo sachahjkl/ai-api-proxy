@@ -4,6 +4,14 @@ services:
     restart: unless-stopped
     environment:
       LISTEN_ADDR: :8080
+      OAUTH_CREDENTIAL_FILE: /run/secrets/oauth.json
+      OAUTH_STATE_FILE: /var/lib/codex-proxy/oauth.json
       PROXY_TOKEN: ${PROXY_TOKEN:?set PROXY_TOKEN}
     ports:
       - "127.0.0.1:8080:8080"
+    volumes:
+      - ${OAUTH_CREDENTIAL_FILE:?set OAUTH_CREDENTIAL_FILE}:/run/secrets/oauth.json:ro
+      - codex-proxy-state:/var/lib/codex-proxy
+
+volumes:
+  codex-proxy-state:
