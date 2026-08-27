@@ -67,6 +67,7 @@
         };
       };
       preCommitCheck = git-hooks.lib.${system}.run {
+        package = pkgs.prek;
         src = ./.;
         hooks = {
           alejandra.enable = true;
