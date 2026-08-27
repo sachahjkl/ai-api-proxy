@@ -22,6 +22,12 @@
   ],
   "items": [
     {
+      "id": "e2558fc4-b5e4-4845-90a3-5c21e80e528a",
+      "title": "Exposer les alias Simulacra",
+      "notes": "Construire les alias depuis le catalogue OpenAI, réécrire les modèles Codex, exposer le catalogue, tester et déployer.",
+      "status": "done"
+    },
+    {
       "id": "e86a6317-0e37-434f-a037-80e309c92eb1",
       "title": "Centraliser OAuth ChatGPT dans le proxy",
       "notes": "Importer le credential OpenCode dans SOPS, renouveler OAuth côté serveur, injecter les headers Codex, déployer et tester un client sans OAuth.",
