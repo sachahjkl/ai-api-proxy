@@ -34,6 +34,10 @@
         vendorHash = null;
         env.CGO_ENABLED = 0;
         ldflags = ["-s" "-w"];
+        postInstall = ''
+          mv "$out/bin/ai-api-proxy" "$out/bin/codex-proxy"
+        '';
+        meta.mainProgram = "codex-proxy";
       };
       goCheck =
         pkgs.runCommand "codex-proxy-go-check" {
@@ -53,7 +57,7 @@
         tag = package.version;
         contents = [package pkgs.cacert];
         config = {
-          Cmd = ["${package}/bin/ai-api-proxy"];
+          Cmd = ["${package}/bin/codex-proxy"];
           Env = [
             "LISTEN_ADDR=:8080"
             "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
@@ -84,7 +88,7 @@
 
       apps.default = {
         type = "app";
-        program = "${package}/bin/ai-api-proxy";
+        program = "${package}/bin/codex-proxy";
       };
 
       checks = {
