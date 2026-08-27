@@ -22,6 +22,12 @@
   ],
   "items": [
     {
+      "id": "154b4821-69e4-458f-b449-731fd9e1c17a",
+      "title": "Automatiser le catalogue Simulacra",
+      "notes": "Exposer /api.json au format models.dev, configurer OPENCODE_MODELS_URL, supprimer la déclaration manuelle des modèles, tester et redéployer.",
+      "status": "done"
+    },
+    {
       "id": "e2558fc4-b5e4-4845-90a3-5c21e80e528a",
       "title": "Exposer les alias Simulacra",
       "notes": "Construire les alias depuis le catalogue OpenAI, réécrire les modèles Codex, exposer le catalogue, tester et déployer.",
