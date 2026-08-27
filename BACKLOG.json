@@ -22,6 +22,12 @@
   ],
   "items": [
     {
+      "id": "e86a6317-0e37-434f-a037-80e309c92eb1",
+      "title": "Centraliser OAuth ChatGPT dans le proxy",
+      "notes": "Importer le credential OpenCode dans SOPS, renouveler OAuth côté serveur, injecter les headers Codex, déployer et tester un client sans OAuth.",
+      "status": "done"
+    },
+    {
       "id": "0983a2eb-421a-43a5-8c84-d1cf1b0b28e5",
       "title": "Ajouter le flake Nix et l'orchestration du proxy",
       "notes": "Aligner ai-api-proxy sur ../nixconfig et les services froment.software et sacha.house. Ajouter les checks, hooks et le déploiement requis.",
