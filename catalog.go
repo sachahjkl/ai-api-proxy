@@ -115,6 +115,7 @@ func addSimulacraCatalog(body []byte, publicURL string) ([]byte, error) {
 		}
 		model["id"], _ = json.Marshal(id)
 		model["name"], _ = json.Marshal(alias.Name)
+		delete(model, "experimental")
 		delete(model, "provider")
 		encoded, err := json.Marshal(model)
 		if err != nil {

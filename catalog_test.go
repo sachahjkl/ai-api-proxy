@@ -14,6 +14,7 @@ func TestAddSimulacraCatalog(t *testing.T) {
 			"attachment": true, "reasoning": true,
 			"reasoning_options": []any{map[string]any{"type": "effort", "values": []string{"low", "high"}}},
 			"tool_call":         true, "limit": map[string]int{"context": 1000, "output": 100},
+			"experimental": map[string]any{"modes": map[string]any{"fast": map[string]any{}}},
 		}
 	}
 	source, err := json.Marshal(map[string]any{
@@ -39,6 +40,7 @@ func TestAddSimulacraCatalog(t *testing.T) {
 			ReasoningOptions []struct {
 				Values []string `json:"values"`
 			} `json:"reasoning_options"`
+			Experimental json.RawMessage `json:"experimental"`
 		} `json:"models"`
 	}
 	if err := json.Unmarshal(body, &catalog); err != nil {
@@ -55,7 +57,7 @@ func TestAddSimulacraCatalog(t *testing.T) {
 		t.Fatalf("provider = %#v", simulacra)
 	}
 	master := simulacra.Models["master"]
-	if master.ID != "master" || master.Name != "Master (5.6 Sol)" || len(master.ReasoningOptions[0].Values) != 2 {
+	if master.ID != "master" || master.Name != "Master (5.6 Sol)" || len(master.ReasoningOptions[0].Values) != 2 || len(master.Experimental) != 0 {
 		t.Fatalf("master = %#v", master)
 	}
 }
