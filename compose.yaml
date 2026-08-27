@@ -1,0 +1,9 @@
+services:
+  codex-proxy:
+    build: .
+    restart: unless-stopped
+    environment:
+      LISTEN_ADDR: :8080
+      PROXY_TOKEN: ${PROXY_TOKEN:?set PROXY_TOKEN}
+    ports:
+      - "127.0.0.1:8080:8080"
