@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
@@ -18,9 +20,11 @@ import (
 const defaultUpstream = "https://chatgpt.com/backend-api/codex"
 
 type config struct {
-	listen     string
-	upstream   *url.URL
-	proxyToken string
+	listen              string
+	upstream            *url.URL
+	proxyToken          string
+	oauthCredentialFile string
+	oauthStateFile      string
 }
 
 func main() {
@@ -30,10 +34,15 @@ func main() {
 		logger.Error("invalid configuration", "error", err)
 		os.Exit(1)
 	}
+	oauth, err := newOAuthManager(cfg.oauthCredentialFile, cfg.oauthStateFile, http.DefaultClient)
+	if err != nil {
+		logger.Error("invalid OAuth credential", "error", err)
+		os.Exit(1)
+	}
 
 	server := &http.Server{
 		Addr:              cfg.listen,
-		Handler:           newHandler(cfg, logger),
+		Handler:           newHandler(cfg, oauth, logger),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 	}
@@ -68,10 +77,20 @@ func loadConfig() (config, error) {
 	if err != nil {
 		return config{}, err
 	}
+	oauthCredentialFile := os.Getenv("OAUTH_CREDENTIAL_FILE")
+	if oauthCredentialFile == "" {
+		return config{}, errors.New("OAUTH_CREDENTIAL_FILE is required")
+	}
+	oauthStateFile := os.Getenv("OAUTH_STATE_FILE")
+	if oauthStateFile == "" {
+		return config{}, errors.New("OAUTH_STATE_FILE is required")
+	}
 	return config{
-		listen:     env("LISTEN_ADDR", ":8080"),
-		upstream:   upstream,
-		proxyToken: proxyToken,
+		listen:              env("LISTEN_ADDR", ":8080"),
+		upstream:            upstream,
+		proxyToken:          proxyToken,
+		oauthCredentialFile: oauthCredentialFile,
+		oauthStateFile:      oauthStateFile,
 	}, nil
 }
 
@@ -96,7 +115,7 @@ func loadProxyToken() (string, error) {
 	return token, nil
 }
 
-func newHandler(cfg config, logger *slog.Logger) http.Handler {
+func newHandler(cfg config, oauth *oauthManager, logger *slog.Logger) http.Handler {
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(request *httputil.ProxyRequest) {
 			request.Out.Header.Del("Proxy-Authorization")
@@ -126,9 +145,35 @@ func newHandler(cfg config, logger *slog.Logger) http.Handler {
 			http.Error(response, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+		credential, err := oauth.current(request.Context())
+		if err != nil {
+			logger.Error("OAuth credential unavailable", "error", err)
+			http.Error(response, "upstream authentication unavailable", http.StatusBadGateway)
+			return
+		}
+		sessionID, err := newSessionID()
+		if err != nil {
+			logger.Error("session ID generation failed", "error", err)
+			http.Error(response, "internal error", http.StatusInternalServerError)
+			return
+		}
+		request.Header.Set("Authorization", "Bearer "+credential.Access)
+		request.Header.Set("ChatGPT-Account-ID", credential.AccountID)
+		request.Header.Set("Originator", "opencode")
+		request.Header.Set("Session-ID", sessionID)
 		logger.Info("proxying request", "method", request.Method, "path", request.URL.Path)
 		proxy.ServeHTTP(response, request)
 	})
+}
+
+func newSessionID() (string, error) {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return "", err
+	}
+	value[6] = value[6]&0x0f | 0x40
+	value[8] = value[8]&0x3f | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", value[0:4], value[4:6], value[6:8], value[8:10], value[10:16]), nil
 }
 
 func validProxyToken(header, expected string) bool {

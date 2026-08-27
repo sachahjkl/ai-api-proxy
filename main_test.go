@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadProxyTokenFromFile(t *testing.T) {
@@ -48,7 +49,10 @@ func TestProxyForwardsCodexRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := newHandler(config{upstream: upstreamURL, proxyToken: "gateway-secret"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	oauth := &oauthManager{credential: oauthCredential{
+		Access: "server-oauth-token", Refresh: "refresh", Expires: time.Now().Add(time.Hour).UnixMilli(), AccountID: "server-account",
+	}}
+	handler := newHandler(config{upstream: upstreamURL, proxyToken: "gateway-secret"}, oauth, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
@@ -75,7 +79,7 @@ func TestProxyForwardsCodexRequest(t *testing.T) {
 	if received.URL.Path != "/backend-api/codex/responses" || received.URL.RawQuery != "foo=bar" {
 		t.Errorf("upstream URL = %s", received.URL.String())
 	}
-	if received.Header.Get("Authorization") != "Bearer chatgpt-oauth-token" {
+	if received.Header.Get("Authorization") != "Bearer server-oauth-token" {
 		t.Errorf("Authorization = %q", received.Header.Get("Authorization"))
 	}
 	if received.Header.Get("Proxy-Authorization") != "" {
@@ -84,8 +88,11 @@ func TestProxyForwardsCodexRequest(t *testing.T) {
 	if strings.Contains(received.Header.Get("X-Forwarded-For"), "spoofed") {
 		t.Errorf("spoofed X-Forwarded-For was preserved: %q", received.Header.Get("X-Forwarded-For"))
 	}
-	if received.Header.Get("ChatGPT-Account-ID") != "acct_123" {
+	if received.Header.Get("ChatGPT-Account-ID") != "server-account" {
 		t.Errorf("ChatGPT-Account-ID = %q", received.Header.Get("ChatGPT-Account-ID"))
+	}
+	if received.Header.Get("Originator") != "opencode" || received.Header.Get("Session-ID") == "" {
+		t.Errorf("missing server context headers")
 	}
 	if body != `{"model":"gpt-5.4"}` {
 		t.Errorf("body = %q", body)
@@ -97,7 +104,7 @@ func TestProxyAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := newHandler(config{upstream: upstream, proxyToken: "gateway-secret"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handler := newHandler(config{upstream: upstream, proxyToken: "gateway-secret"}, &oauthManager{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	request := httptest.NewRequest(http.MethodPost, "/responses", nil)
 	response := httptest.NewRecorder()
@@ -112,7 +119,7 @@ func TestHealthDoesNotRequireAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := newHandler(config{upstream: upstream, proxyToken: "gateway-secret"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handler := newHandler(config{upstream: upstream, proxyToken: "gateway-secret"}, &oauthManager{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	response := httptest.NewRecorder()
