@@ -123,10 +123,15 @@ func newHandler(cfg config, oauth *oauthManager, logger *slog.Logger) http.Handl
 			request.Out.Header.Del("X-Forwarded-Host")
 			request.Out.Header.Del("X-Forwarded-Proto")
 			request.SetURL(cfg.upstream)
+			if request.In.URL.Path == "/models" {
+				request.Out.Header.Del("Accept-Encoding")
+				request.Out.Header.Del("If-None-Match")
+			}
 			request.SetXForwarded()
 			request.Out.Host = cfg.upstream.Host
 		},
-		FlushInterval: -1,
+		FlushInterval:  -1,
+		ModifyResponse: rewriteModelsResponse,
 		ErrorHandler: func(response http.ResponseWriter, request *http.Request, err error) {
 			logger.Error("upstream request failed", "method", request.Method, "path", request.URL.Path, "error", err)
 			http.Error(response, "upstream unavailable", http.StatusBadGateway)
@@ -143,6 +148,10 @@ func newHandler(cfg config, oauth *oauthManager, logger *slog.Logger) http.Handl
 		if cfg.proxyToken != "" && !validProxyToken(request.Header.Get("Proxy-Authorization"), cfg.proxyToken) {
 			response.Header().Set("WWW-Authenticate", `Bearer realm="codex-proxy"`)
 			http.Error(response, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if err := rewriteRequestModel(request); err != nil {
+			http.Error(response, err.Error(), http.StatusBadRequest)
 			return
 		}
 		credential, err := oauth.current(request.Context())

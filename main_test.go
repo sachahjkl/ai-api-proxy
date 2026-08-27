@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -56,7 +57,7 @@ func TestProxyForwardsCodexRequest(t *testing.T) {
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
-	request, err := http.NewRequest(http.MethodPost, proxy.URL+"/responses?foo=bar", strings.NewReader(`{"model":"gpt-5.4"}`))
+	request, err := http.NewRequest(http.MethodPost, proxy.URL+"/responses?foo=bar", strings.NewReader(`{"model":"captain"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,8 +95,14 @@ func TestProxyForwardsCodexRequest(t *testing.T) {
 	if received.Header.Get("Originator") != "opencode" || received.Header.Get("Session-ID") == "" {
 		t.Errorf("missing server context headers")
 	}
-	if body != `{"model":"gpt-5.4"}` {
-		t.Errorf("body = %q", body)
+	var receivedBody struct {
+		Model string `json:"model"`
+	}
+	if err := json.Unmarshal([]byte(body), &receivedBody); err != nil {
+		t.Fatal(err)
+	}
+	if receivedBody.Model != "gpt-5.4" {
+		t.Errorf("model = %q", receivedBody.Model)
 	}
 }
 

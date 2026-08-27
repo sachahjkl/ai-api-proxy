@@ -25,6 +25,19 @@ Le fichier OAuth initial contient ce JSON :
 
 Le proxy conserve les renouvellements dans `OAUTH_STATE_FILE`. Protégez le fichier initial et le répertoire d'état.
 
+Le proxy expose le manifeste Codex authentifié sur `/models`. Il conserve les capacités et les niveaux de raisonnement fournis par OpenAI.
+
+| Modèle Simulacra | Modèle upstream |
+| --- | --- |
+| `master` | `gpt-5.6-sol` |
+| `marshal` | `gpt-5.6-terra` |
+| `commander` | `gpt-5.6-luna` |
+| `general` | `gpt-5.5` |
+| `captain` | `gpt-5.4` |
+| `scout` | `gpt-5.4-mini` |
+
+Une requête `/responses` peut utiliser un identifiant Simulacra. Le proxy le remplace par l'identifiant upstream correspondant.
+
 ## Demarrage
 
 ```sh
@@ -81,9 +94,10 @@ Le client OpenCode n'a pas besoin d'une connexion ChatGPT. Ajoutez ceci dans `~/
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "codex/gpt-5.6-luna",
+  "model": "simulacra/commander",
   "providers": {
-    "codex": {
+    "simulacra": {
+      "name": "Simulacra",
       "package": "@opencode-ai/ai/providers/openai/responses",
       "settings": {
         "baseURL": "https://codex-proxy.example.net",
@@ -93,14 +107,23 @@ Le client OpenCode n'a pas besoin d'une connexion ChatGPT. Ajoutez ceci dans `~/
         "Proxy-Authorization": "Bearer un-secret-long-et-aleatoire"
       },
       "models": {
-        "gpt-5.6-luna": {
-          "name": "GPT-5.6 Luna"
+        "master": {
+          "name": "Master"
         },
-        "gpt-5.5": {
-          "name": "GPT-5.5"
+        "marshal": {
+          "name": "Marshal"
         },
-        "gpt-5.4": {
-          "name": "GPT-5.4"
+        "commander": {
+          "name": "Commander"
+        },
+        "general": {
+          "name": "General"
+        },
+        "captain": {
+          "name": "Captain"
+        },
+        "scout": {
+          "name": "Scout"
         }
       }
     }
