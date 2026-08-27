@@ -25,16 +25,16 @@ Le fichier OAuth initial contient ce JSON :
 
 Le proxy conserve les renouvellements dans `OAUTH_STATE_FILE`. Protégez le fichier initial et le répertoire d'état.
 
-Le proxy expose le manifeste Codex authentifié sur `/models`. Il conserve les capacités et les niveaux de raisonnement fournis par OpenAI.
+Le proxy expose le manifeste Codex authentifié sur `/models`. Il publie aussi un catalogue OpenCode complet sur `/api.json`.
 
 | Modèle Simulacra | Modèle upstream |
 | --- | --- |
-| `master` | `gpt-5.6-sol` |
-| `marshal` | `gpt-5.6-terra` |
-| `commander` | `gpt-5.6-luna` |
-| `general` | `gpt-5.5` |
-| `captain` | `gpt-5.4` |
-| `scout` | `gpt-5.4-mini` |
+| `master` : Master (5.6 Sol) | `gpt-5.6-sol` |
+| `marshal` : Marshal (5.6 Terra) | `gpt-5.6-terra` |
+| `commander` : Commander (5.6 Luna) | `gpt-5.6-luna` |
+| `general` : General (5.5) | `gpt-5.5` |
+| `captain` : Captain (5.4) | `gpt-5.4` |
+| `scout` : Scout (5.4 Mini) | `gpt-5.4-mini` |
 
 Une requête `/responses` peut utiliser un identifiant Simulacra. Le proxy le remplace par l'identifiant upstream correspondant.
 
@@ -89,7 +89,13 @@ codex-proxy.example.net {
 
 ## Configuration OpenCode V2
 
-Le client OpenCode n'a pas besoin d'une connexion ChatGPT. Ajoutez ceci dans `~/.config/opencode/opencode.jsonc` ou dans la configuration du projet :
+Définissez la source du catalogue avant de démarrer OpenCode :
+
+```sh
+export OPENCODE_MODELS_URL="https://codex-proxy.example.net"
+```
+
+Le client OpenCode n'a pas besoin d'une connexion ChatGPT. Ajoutez cette configuration sans bloc `models` :
 
 ```jsonc
 {
@@ -97,34 +103,11 @@ Le client OpenCode n'a pas besoin d'une connexion ChatGPT. Ajoutez ceci dans `~/
   "model": "simulacra/commander",
   "providers": {
     "simulacra": {
-      "name": "Simulacra",
-      "package": "@opencode-ai/ai/providers/openai/responses",
       "settings": {
-        "baseURL": "https://codex-proxy.example.net",
         "apiKey": "unused"
       },
       "headers": {
         "Proxy-Authorization": "Bearer un-secret-long-et-aleatoire"
-      },
-      "models": {
-        "master": {
-          "name": "Master"
-        },
-        "marshal": {
-          "name": "Marshal"
-        },
-        "commander": {
-          "name": "Commander"
-        },
-        "general": {
-          "name": "General"
-        },
-        "captain": {
-          "name": "Captain"
-        },
-        "scout": {
-          "name": "Scout"
-        }
       }
     }
   }

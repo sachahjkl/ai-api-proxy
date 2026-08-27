@@ -25,7 +25,7 @@
       pkgs = nixpkgs.legacyPackages.${system};
       src = pkgs.lib.fileset.toSource {
         root = ./.;
-        fileset = pkgs.lib.fileset.unions [./go.mod ./main.go ./main_test.go ./models.go ./models_test.go ./oauth.go ./oauth_test.go];
+        fileset = pkgs.lib.fileset.unions [./catalog.go ./catalog_test.go ./go.mod ./main.go ./main_test.go ./models.go ./models_test.go ./oauth.go ./oauth_test.go];
       };
       package = pkgs.buildGoModule {
         pname = "codex-proxy";

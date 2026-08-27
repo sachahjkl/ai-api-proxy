@@ -17,12 +17,12 @@ type modelAlias struct {
 }
 
 var modelAliases = map[string]modelAlias{
-	"master":    {Name: "Master", Upstream: "gpt-5.6-sol"},
-	"marshal":   {Name: "Marshal", Upstream: "gpt-5.6-terra"},
-	"commander": {Name: "Commander", Upstream: "gpt-5.6-luna"},
-	"general":   {Name: "General", Upstream: "gpt-5.5"},
-	"captain":   {Name: "Captain", Upstream: "gpt-5.4"},
-	"scout":     {Name: "Scout", Upstream: "gpt-5.4-mini"},
+	"master":    {Name: "Master (5.6 Sol)", Upstream: "gpt-5.6-sol"},
+	"marshal":   {Name: "Marshal (5.6 Terra)", Upstream: "gpt-5.6-terra"},
+	"commander": {Name: "Commander (5.6 Luna)", Upstream: "gpt-5.6-luna"},
+	"general":   {Name: "General (5.5)", Upstream: "gpt-5.5"},
+	"captain":   {Name: "Captain (5.4)", Upstream: "gpt-5.4"},
+	"scout":     {Name: "Scout (5.4 Mini)", Upstream: "gpt-5.4-mini"},
 }
 
 func rewriteRequestModel(request *http.Request) error {

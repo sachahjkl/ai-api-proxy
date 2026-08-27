@@ -116,6 +116,7 @@ func loadProxyToken() (string, error) {
 }
 
 func newHandler(cfg config, oauth *oauthManager, logger *slog.Logger) http.Handler {
+	catalog := newModelCatalog()
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(request *httputil.ProxyRequest) {
 			request.Out.Header.Del("Proxy-Authorization")
@@ -143,6 +144,13 @@ func newHandler(cfg config, oauth *oauthManager, logger *slog.Logger) http.Handl
 			response.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			response.WriteHeader(http.StatusOK)
 			_, _ = response.Write([]byte("ok\n"))
+			return
+		}
+		if request.Method == http.MethodGet && request.URL.Path == "/api.json" {
+			if err := catalog.serve(response, request); err != nil {
+				logger.Error("model catalog unavailable", "error", err)
+				http.Error(response, "model catalog unavailable", http.StatusBadGateway)
+			}
 			return
 		}
 		if cfg.proxyToken != "" && !validProxyToken(request.Header.Get("Proxy-Authorization"), cfg.proxyToken) {

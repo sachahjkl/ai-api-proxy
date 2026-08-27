@@ -60,10 +60,10 @@ func TestRewriteModelsResponse(t *testing.T) {
 	if len(catalog.Models) != 2 {
 		t.Fatalf("models = %#v", catalog.Models)
 	}
-	if catalog.Models[0].Slug != "master" || catalog.Models[0].DisplayName != "Master" || catalog.Models[0].SupportedReasoningLevels[0].Effort != "max" {
+	if catalog.Models[0].Slug != "master" || catalog.Models[0].DisplayName != "Master (5.6 Sol)" || catalog.Models[0].SupportedReasoningLevels[0].Effort != "max" {
 		t.Fatalf("master = %#v", catalog.Models[0])
 	}
-	if catalog.Models[1].Slug != "marshal" || catalog.Models[1].DisplayName != "Marshal" {
+	if catalog.Models[1].Slug != "marshal" || catalog.Models[1].DisplayName != "Marshal (5.6 Terra)" {
 		t.Fatalf("marshal = %#v", catalog.Models[1])
 	}
 }
