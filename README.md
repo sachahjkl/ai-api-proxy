@@ -10,7 +10,20 @@ Le comportement vient du provider OpenAI d'OpenCode V2 present dans `opencode/pa
 - contexte : `chatgpt-account-id`, `originator` et `session-id` ;
 - reponses en streaming SSE et, si le client l'utilise, WebSocket.
 
-Le proxy ne stocke pas et ne renouvelle pas les jetons ChatGPT. OpenCode continue de faire la connexion OAuth et le renouvellement. Le jeton traverse donc le VPN et le proxy pendant chaque requete.
+Le proxy stocke le credential OAuth ChatGPT et renouvelle le jeton d'accès. Les clients envoient seulement le secret partagé du proxy.
+
+Le fichier OAuth initial contient ce JSON :
+
+```json
+{
+  "access": "jeton-acces",
+  "refresh": "jeton-renouvellement",
+  "expires": 1787824843000,
+  "account_id": "identifiant-compte"
+}
+```
+
+Le proxy conserve les renouvellements dans `OAUTH_STATE_FILE`. Protégez le fichier initial et le répertoire d'état.
 
 ## Demarrage
 
@@ -35,6 +48,8 @@ Variables :
 | `UPSTREAM_URL` | `https://chatgpt.com/backend-api/codex` | Upstream HTTPS fixe |
 | `PROXY_TOKEN` | vide | Secret partage facultatif |
 | `PROXY_TOKEN_FILE` | vide | Fichier qui contient le secret partage |
+| `OAUTH_CREDENTIAL_FILE` | requis | Fichier JSON du credential OAuth ChatGPT |
+| `OAUTH_STATE_FILE` | requis | Fichier persistant des jetons renouvelés |
 
 Quand `PROXY_TOKEN` est defini, le client doit envoyer `Proxy-Authorization: Bearer <secret>`. Ce header est supprime avant la requete vers OpenAI. Le header `Authorization` reste reserve au jeton OAuth ChatGPT.
 
@@ -44,6 +59,7 @@ Pour Docker :
 
 ```sh
 export PROXY_TOKEN='un-secret-long-et-aleatoire'
+export OAUTH_CREDENTIAL_FILE="$PWD/oauth.json"
 docker compose up -d --build
 curl http://127.0.0.1:8080/healthz
 ```
@@ -60,31 +76,48 @@ codex-proxy.example.net {
 
 ## Configuration OpenCode V2
 
-Connectez d'abord OpenCode a `ChatGPT Pro/Plus (browser)` ou `ChatGPT Pro/Plus (headless)`. Ajoutez ensuite ceci dans `~/.config/opencode/opencode.jsonc` ou dans la configuration du projet :
+Le client OpenCode n'a pas besoin d'une connexion ChatGPT. Ajoutez ceci dans `~/.config/opencode/opencode.jsonc` ou dans la configuration du projet :
 
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
+  "model": "codex/gpt-5.6-luna",
   "providers": {
-    "openai": {
+    "codex": {
+      "package": "@opencode-ai/ai/providers/openai/responses",
       "settings": {
-        "baseURL": "https://codex-proxy.example.net"
+        "baseURL": "https://codex-proxy.example.net",
+        "apiKey": "unused"
       },
       "headers": {
         "Proxy-Authorization": "Bearer un-secret-long-et-aleatoire"
+      },
+      "models": {
+        "gpt-5.6-luna": {
+          "name": "GPT-5.6 Luna"
+        },
+        "gpt-5.5": {
+          "name": "GPT-5.5"
+        },
+        "gpt-5.4": {
+          "name": "GPT-5.4"
+        }
       }
     }
   }
 }
 ```
 
-Si l'acces est deja limite au VPN, laissez `PROXY_TOKEN` vide et retirez `headers` de la configuration. Cette option evite de conserver un second secret dans le fichier OpenCode.
+`apiKey` satisfait le provider OpenAI local. Le proxy supprime l'`Authorization` généré et injecte son propre jeton OAuth.
+
+Si l'accès est déjà limité au VPN, laissez `PROXY_TOKEN` vide et retirez `headers` de la configuration.
 
 Ne mettez pas `/backend-api/codex` dans `baseURL` : le proxy ajoute ce prefixe. Une requete OpenCode vers `/responses` devient une requete upstream vers `/backend-api/codex/responses`.
 
 ## Limites de securite
 
-- Toute personne qui controle le proxy peut lire les prompts, les reponses et le jeton OAuth en memoire ou sur le reseau local si TLS s'arrete avant le proxy.
+- Toute personne qui possède `PROXY_TOKEN` peut utiliser l'abonnement Codex centralisé.
+- Toute personne qui contrôle le proxy peut lire les prompts, les réponses et le credential OAuth.
 - Les journaux inclus n'enregistrent ni headers ni corps. Verifiez aussi la configuration des journaux du reverse proxy TLS place devant.
 - Ne publiez pas ce service directement sur Internet sans TLS et controle d'acces.
 - L'usage reste soumis aux conditions du service ChatGPT et de Codex.
