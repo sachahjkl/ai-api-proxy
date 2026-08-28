@@ -1,5 +1,3 @@
-[English](README.md) | [Français](README.fr.md)
-
 # Codex subscription reverse proxy
 
 This service forwards OpenCode traffic to the Codex backend used by a ChatGPT Plus or Pro subscription. It is not a proxy for the standard OpenAI API.
