@@ -115,6 +115,13 @@ func addSimulacraCatalog(body []byte, publicURL string) ([]byte, error) {
 		}
 		model["id"], _ = json.Marshal(id)
 		model["name"], _ = json.Marshal(alias.Name)
+		var limit map[string]json.RawMessage
+		if err := json.Unmarshal(model["limit"], &limit); err != nil {
+			return nil, fmt.Errorf("decode OpenAI model %s limits: %w", alias.Upstream, err)
+		}
+		limit["context"], _ = json.Marshal(400_000)
+		limit["input"], _ = json.Marshal(272_000)
+		model["limit"], _ = json.Marshal(limit)
 		delete(model, "experimental")
 		delete(model, "provider")
 		encoded, err := json.Marshal(model)

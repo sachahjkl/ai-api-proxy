@@ -35,8 +35,13 @@ func TestAddSimulacraCatalog(t *testing.T) {
 		API    string `json:"api"`
 		NPM    string `json:"npm"`
 		Models map[string]struct {
-			ID               string `json:"id"`
-			Name             string `json:"name"`
+			ID    string `json:"id"`
+			Name  string `json:"name"`
+			Limit struct {
+				Context int `json:"context"`
+				Input   int `json:"input"`
+				Output  int `json:"output"`
+			} `json:"limit"`
 			ReasoningOptions []struct {
 				Values []string `json:"values"`
 			} `json:"reasoning_options"`
@@ -59,6 +64,9 @@ func TestAddSimulacraCatalog(t *testing.T) {
 	master := simulacra.Models["master"]
 	if master.ID != "master" || master.Name != "Master (5.6 Sol)" || len(master.ReasoningOptions[0].Values) != 2 || len(master.Experimental) != 0 {
 		t.Fatalf("master = %#v", master)
+	}
+	if master.Limit.Context != 400_000 || master.Limit.Input != 272_000 || master.Limit.Output != 100 {
+		t.Fatalf("master limits = %#v", master.Limit)
 	}
 }
 
