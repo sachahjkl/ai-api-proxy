@@ -22,6 +22,12 @@
   ],
   "items": [
     {
+      "id": "6fe667fd-14d3-4cd4-b061-b36bfe9ae475",
+      "title": "Corriger les limites Simulacra",
+      "notes": "Publier context=400000 et input=272000 comme le provider OpenAI OAuth natif, tester puis déployer.",
+      "status": "done"
+    },
+    {
       "id": "154b4821-69e4-458f-b449-731fd9e1c17a",
       "title": "Automatiser le catalogue Simulacra",
       "notes": "Exposer /api.json au format models.dev, configurer OPENCODE_MODELS_URL, supprimer la déclaration manuelle des modèles, tester et redéployer.",
