@@ -1,18 +1,20 @@
+[English](README.md) | [Français](README.fr.md)
+
 # Codex subscription reverse proxy
 
-Ce service fait suivre le trafic OpenCode vers le backend Codex utilise par un abonnement ChatGPT Plus ou Pro. Ce n'est pas un proxy pour l'API OpenAI classique.
+This service forwards OpenCode traffic to the Codex backend used by a ChatGPT Plus or Pro subscription. It is not a proxy for the standard OpenAI API.
 
-Le comportement vient du provider OpenAI d'OpenCode V2 present dans `opencode/packages/core/src/plugin/provider/openai.ts` :
+Its behavior comes from the OpenAI provider in OpenCode V2 at `opencode/packages/core/src/plugin/provider/openai.ts`:
 
-- upstream : `https://chatgpt.com/backend-api/codex` ;
-- endpoint principal : `/responses` ;
-- authentification upstream : jeton OAuth ChatGPT dans `Authorization` ;
-- contexte : `chatgpt-account-id`, `originator` et `session-id` ;
-- reponses en streaming SSE et, si le client l'utilise, WebSocket.
+- upstream: `https://chatgpt.com/backend-api/codex`;
+- main endpoint: `/responses`;
+- upstream authentication: ChatGPT OAuth token in `Authorization`;
+- context: `chatgpt-account-id`, `originator`, and `session-id`;
+- SSE streaming responses and, when the client uses it, WebSocket.
 
-Le proxy stocke le credential OAuth ChatGPT et renouvelle le jeton d'accès. Les clients envoient seulement le secret partagé du proxy.
+The proxy stores the ChatGPT OAuth credential and refreshes the access token. Clients send only the proxy shared secret.
 
-Le fichier OAuth initial contient ce JSON :
+The initial OAuth file contains this JSON:
 
 ```json
 {
@@ -23,11 +25,11 @@ Le fichier OAuth initial contient ce JSON :
 }
 ```
 
-Le proxy conserve les renouvellements dans `OAUTH_STATE_FILE`. Protégez le fichier initial et le répertoire d'état.
+The proxy stores refreshed tokens in `OAUTH_STATE_FILE`. Protect the initial file and the state directory.
 
-Le proxy expose le manifeste Codex authentifié sur `/models`. Il publie aussi un catalogue OpenCode complet sur `/api.json`.
+The proxy exposes the authenticated Codex manifest at `/models`. It also publishes a complete OpenCode catalog at `/api.json`.
 
-| Modèle Simulacra | Modèle upstream |
+| Simulacra model | Upstream model |
 | --- | --- |
 | `master` : Master (5.6 Sol) | `gpt-5.6-sol` |
 | `marshal` : Marshal (5.6 Terra) | `gpt-5.6-terra` |
@@ -36,16 +38,16 @@ Le proxy expose le manifeste Codex authentifié sur `/models`. Il publie aussi u
 | `captain` : Captain (5.4) | `gpt-5.4` |
 | `scout` : Scout (5.4 Mini) | `gpt-5.4-mini` |
 
-Une requête `/responses` peut utiliser un identifiant Simulacra. Le proxy le remplace par l'identifiant upstream correspondant.
+A `/responses` request can use a Simulacra identifier. The proxy replaces it with the corresponding upstream identifier.
 
-## Demarrage
+## Getting Started
 
 ```sh
 go test ./...
 go run .
 ```
 
-Avec Nix :
+With Nix:
 
 ```sh
 nix develop
@@ -53,22 +55,22 @@ nix flake check
 nix run
 ```
 
-Variables :
+Variables:
 
-| Variable | Defaut | Description |
+| Variable | Default | Description |
 | --- | --- | --- |
-| `LISTEN_ADDR` | `:8080` | Adresse d'ecoute HTTP |
-| `UPSTREAM_URL` | `https://chatgpt.com/backend-api/codex` | Upstream HTTPS fixe |
-| `PROXY_TOKEN` | vide | Secret partage facultatif |
-| `PROXY_TOKEN_FILE` | vide | Fichier qui contient le secret partage |
-| `OAUTH_CREDENTIAL_FILE` | requis | Fichier JSON du credential OAuth ChatGPT |
-| `OAUTH_STATE_FILE` | requis | Fichier persistant des jetons renouvelés |
+| `LISTEN_ADDR` | `:8080` | HTTP listen address |
+| `UPSTREAM_URL` | `https://chatgpt.com/backend-api/codex` | Fixed HTTPS upstream |
+| `PROXY_TOKEN` | empty | Optional shared secret |
+| `PROXY_TOKEN_FILE` | empty | File containing the shared secret |
+| `OAUTH_CREDENTIAL_FILE` | required | JSON file containing the ChatGPT OAuth credential |
+| `OAUTH_STATE_FILE` | required | Persistent file for refreshed tokens |
 
-Quand `PROXY_TOKEN` est defini, le client doit envoyer `Proxy-Authorization: Bearer <secret>`. Ce header est supprime avant la requete vers OpenAI. Le header `Authorization` reste reserve au jeton OAuth ChatGPT.
+When `PROXY_TOKEN` is set, the client must send `Proxy-Authorization: Bearer <secret>`. The proxy removes this header before the request to OpenAI. The `Authorization` header remains reserved for the ChatGPT OAuth token.
 
-N'utilisez pas `PROXY_TOKEN` et `PROXY_TOKEN_FILE` ensemble. Le module NixOS utilise `PROXY_TOKEN_FILE` avec un credential systemd.
+Do not use `PROXY_TOKEN` and `PROXY_TOKEN_FILE` together. The NixOS module uses `PROXY_TOKEN_FILE` with a systemd credential.
 
-Pour Docker :
+For Docker:
 
 ```sh
 export PROXY_TOKEN='un-secret-long-et-aleatoire'
@@ -77,9 +79,9 @@ docker compose up -d --build
 curl http://127.0.0.1:8080/healthz
 ```
 
-Le port du compose n'est expose que sur loopback. Publiez-le avec Caddy, Traefik ou votre solution VPN. Utilisez HTTPS sauf si le trafic HTTP reste entierement dans un tunnel chiffre comme WireGuard ou Tailscale.
+The Compose port is exposed only on loopback. Publish it with Caddy, Traefik, or your VPN solution. Use HTTPS unless all HTTP traffic stays within an encrypted tunnel such as WireGuard or Tailscale.
 
-Exemple Caddy :
+Caddy example:
 
 ```caddyfile
 codex-proxy.example.net {
@@ -87,15 +89,15 @@ codex-proxy.example.net {
 }
 ```
 
-## Configuration OpenCode V2
+## OpenCode V2 Configuration
 
-Définissez la source du catalogue avant de démarrer OpenCode :
+Set the catalog source before starting OpenCode:
 
 ```sh
 export OPENCODE_MODELS_URL="https://codex-proxy.example.net"
 ```
 
-Le client OpenCode n'a pas besoin d'une connexion ChatGPT. Ajoutez cette configuration sans bloc `models` :
+The OpenCode client does not need a ChatGPT connection. Add this configuration without a `models` block:
 
 ```jsonc
 {
@@ -114,16 +116,16 @@ Le client OpenCode n'a pas besoin d'une connexion ChatGPT. Ajoutez cette configu
 }
 ```
 
-`apiKey` satisfait le provider OpenAI local. Le proxy supprime l'`Authorization` généré et injecte son propre jeton OAuth.
+`apiKey` satisfies the local OpenAI provider. The proxy removes the generated `Authorization` and injects its own OAuth token.
 
-Si l'accès est déjà limité au VPN, laissez `PROXY_TOKEN` vide et retirez `headers` de la configuration.
+If access is already restricted to the VPN, leave `PROXY_TOKEN` empty and remove `headers` from the configuration.
 
-Ne mettez pas `/backend-api/codex` dans `baseURL` : le proxy ajoute ce prefixe. Une requete OpenCode vers `/responses` devient une requete upstream vers `/backend-api/codex/responses`.
+Do not put `/backend-api/codex` in `baseURL`: the proxy adds this prefix. An OpenCode request to `/responses` becomes an upstream request to `/backend-api/codex/responses`.
 
-## Limites de securite
+## Security Limits
 
-- Toute personne qui possède `PROXY_TOKEN` peut utiliser l'abonnement Codex centralisé.
-- Toute personne qui contrôle le proxy peut lire les prompts, les réponses et le credential OAuth.
-- Les journaux inclus n'enregistrent ni headers ni corps. Verifiez aussi la configuration des journaux du reverse proxy TLS place devant.
-- Ne publiez pas ce service directement sur Internet sans TLS et controle d'acces.
-- L'usage reste soumis aux conditions du service ChatGPT et de Codex.
+- Anyone who has `PROXY_TOKEN` can use the centralized Codex subscription.
+- Anyone who controls the proxy can read prompts, responses, and the OAuth credential.
+- The included logs record neither headers nor bodies. Also check the logging configuration of the TLS reverse proxy in front of this service.
+- Do not publish this service directly on the Internet without TLS and access control.
+- Use remains subject to the ChatGPT and Codex terms of service.
