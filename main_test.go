@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -103,6 +104,71 @@ func TestProxyForwardsCodexRequest(t *testing.T) {
 	}
 	if receivedBody.Model != "gpt-5.4" {
 		t.Errorf("model = %q", receivedBody.Model)
+	}
+}
+
+func TestProxyStreamsCodexResponse(t *testing.T) {
+	releaseUpstream := make(chan struct{})
+	upstream := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "text/event-stream")
+		_, _ = response.Write([]byte("data: first\n\n"))
+		response.(http.Flusher).Flush()
+		<-releaseUpstream
+		_, _ = response.Write([]byte("data: second\n\n"))
+	}))
+	defer upstream.Close()
+
+	upstreamURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oauth := &oauthManager{credential: oauthCredential{
+		Access: "server-oauth-token", Refresh: "refresh", Expires: time.Now().Add(time.Hour).UnixMilli(), AccountID: "server-account",
+	}}
+	proxy := httptest.NewServer(newHandler(config{upstream: upstreamURL}, oauth, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	defer proxy.Close()
+
+	responseChannel := make(chan *http.Response, 1)
+	errorChannel := make(chan error, 1)
+	go func() {
+		response, err := http.Post(proxy.URL+"/responses", "application/json", strings.NewReader(`{"model":"gpt-5.4","stream":true}`))
+		if err != nil {
+			errorChannel <- err
+			return
+		}
+		responseChannel <- response
+	}()
+
+	var response *http.Response
+	select {
+	case response = <-responseChannel:
+	case err := <-errorChannel:
+		close(releaseUpstream)
+		t.Fatal(err)
+	case <-time.After(time.Second):
+		close(releaseUpstream)
+		t.Fatal("proxy buffered the first SSE event")
+	}
+	defer response.Body.Close()
+
+	reader := bufio.NewReader(response.Body)
+	firstEvent, err := reader.ReadString('\n')
+	if err != nil {
+		close(releaseUpstream)
+		t.Fatal(err)
+	}
+	if firstEvent != "data: first\n" {
+		close(releaseUpstream)
+		t.Fatalf("first event = %q", firstEvent)
+	}
+
+	close(releaseUpstream)
+	remainder, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(remainder) != "\ndata: second\n\n" {
+		t.Fatalf("remaining stream = %q", remainder)
 	}
 }
 

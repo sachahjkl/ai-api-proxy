@@ -22,6 +22,12 @@
   ],
   "items": [
     {
+      "id": "7ecfc115-ac36-440f-aff8-ecc83c25f5ed",
+      "title": "Supporter le streaming HTTP",
+      "notes": "Vérifier le proxy des réponses diffusées, ajouter les tests nécessaires, valider, publier et déployer sur le homelab.",
+      "status": "done"
+    },
+    {
       "id": "6fe667fd-14d3-4cd4-b061-b36bfe9ae475",
       "title": "Corriger les limites Simulacra",
       "notes": "Publier context=400000 et input=272000 comme le provider OpenAI OAuth natif, tester puis déployer.",
