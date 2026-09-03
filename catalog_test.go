@@ -68,6 +68,13 @@ func TestAddSimulacraCatalog(t *testing.T) {
 	if master.Limit.Context != 400_000 || master.Limit.Input != 272_000 || master.Limit.Output != 100 {
 		t.Fatalf("master limits = %#v", master.Limit)
 	}
+	longMaster := simulacra.Models["master-1m"]
+	if longMaster.ID != "master-1m" || longMaster.Name != "Master (5.6 Sol, 1M)" {
+		t.Fatalf("long-context master = %#v", longMaster)
+	}
+	if longMaster.Limit.Context != 1_000_000 || longMaster.Limit.Input != 872_000 || longMaster.Limit.Output != 100 {
+		t.Fatalf("long-context master limits = %#v", longMaster.Limit)
+	}
 }
 
 func TestRequestOriginUsesForwardedOrigin(t *testing.T) {

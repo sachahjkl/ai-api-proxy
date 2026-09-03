@@ -30,13 +30,18 @@ The proxy exposes the authenticated Codex manifest at `/models`. It also publish
 | Simulacra model | Upstream model |
 | --- | --- |
 | `master` : Master (5.6 Sol) | `gpt-5.6-sol` |
+| `master-1m` : Master (5.6 Sol, 1M) | `gpt-5.6-sol` |
 | `marshal` : Marshal (5.6 Terra) | `gpt-5.6-terra` |
+| `marshal-1m` : Marshal (5.6 Terra, 1M) | `gpt-5.6-terra` |
 | `commander` : Commander (5.6 Luna) | `gpt-5.6-luna` |
+| `commander-1m` : Commander (5.6 Luna, 1M) | `gpt-5.6-luna` |
 | `general` : General (5.5) | `gpt-5.5` |
 | `captain` : Captain (5.4) | `gpt-5.4` |
 | `scout` : Scout (5.4 Mini) | `gpt-5.4-mini` |
 
 A `/responses` request can use a Simulacra identifier. The proxy replaces it with the corresponding upstream identifier.
+
+The `-1m` GPT-5.6 aliases advertise the optional Codex OAuth long-context window: 1,000,000 context tokens, including 872,000 input tokens and 128,000 output tokens. The aliases without `-1m` retain the conservative 400,000-token context limit.
 
 ## Getting Started
 

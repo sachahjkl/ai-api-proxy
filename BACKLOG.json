@@ -22,6 +22,12 @@
   ],
   "items": [
     {
+      "id": "ed4692b6-501d-4e03-9afe-5404347a5a2c",
+      "title": "Ajouter les variantes GPT-5.6 1M",
+      "notes": "Exposer des alias Simulacra 1M vers les mêmes modèles Codex OAuth, conserver les limites sûres, tester et déployer.",
+      "status": "doing"
+    },
+    {
       "id": "7ecfc115-ac36-440f-aff8-ecc83c25f5ed",
       "title": "Supporter le streaming HTTP",
       "notes": "Vérifier le proxy des réponses diffusées, ajouter les tests nécessaires, valider, publier et déployer sur le homelab.",

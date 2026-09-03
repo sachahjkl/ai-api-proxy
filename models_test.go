@@ -10,23 +10,27 @@ import (
 )
 
 func TestRewriteRequestModel(t *testing.T) {
-	request := httptest.NewRequest(http.MethodPost, "/responses", strings.NewReader(`{"model":"master","input":"hello"}`))
-	if err := rewriteRequestModel(request); err != nil {
-		t.Fatal(err)
-	}
-	body, err := io.ReadAll(request.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var value struct {
-		Model string `json:"model"`
-		Input string `json:"input"`
-	}
-	if err := json.Unmarshal(body, &value); err != nil {
-		t.Fatal(err)
-	}
-	if value.Model != "gpt-5.6-sol" || value.Input != "hello" {
-		t.Fatalf("body = %s", body)
+	for _, model := range []string{"master", "master-1m"} {
+		t.Run(model, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/responses", strings.NewReader(`{"model":"`+model+`","input":"hello"}`))
+			if err := rewriteRequestModel(request); err != nil {
+				t.Fatal(err)
+			}
+			body, err := io.ReadAll(request.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var value struct {
+				Model string `json:"model"`
+				Input string `json:"input"`
+			}
+			if err := json.Unmarshal(body, &value); err != nil {
+				t.Fatal(err)
+			}
+			if value.Model != "gpt-5.6-sol" || value.Input != "hello" {
+				t.Fatalf("body = %s", body)
+			}
+		})
 	}
 }
 
@@ -57,13 +61,30 @@ func TestRewriteModelsResponse(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&catalog); err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog.Models) != 2 {
+	if len(catalog.Models) != 4 {
 		t.Fatalf("models = %#v", catalog.Models)
 	}
-	if catalog.Models[0].Slug != "master" || catalog.Models[0].DisplayName != "Master (5.6 Sol)" || catalog.Models[0].SupportedReasoningLevels[0].Effort != "max" {
-		t.Fatalf("master = %#v", catalog.Models[0])
+	models := make(map[string]struct {
+		Name   string
+		Effort string
+	}, len(catalog.Models))
+	for _, model := range catalog.Models {
+		effort := ""
+		if len(model.SupportedReasoningLevels) != 0 {
+			effort = model.SupportedReasoningLevels[0].Effort
+		}
+		models[model.Slug] = struct {
+			Name   string
+			Effort string
+		}{Name: model.DisplayName, Effort: effort}
 	}
-	if catalog.Models[1].Slug != "marshal" || catalog.Models[1].DisplayName != "Marshal (5.6 Terra)" {
-		t.Fatalf("marshal = %#v", catalog.Models[1])
+	if models["master"].Name != "Master (5.6 Sol)" || models["master"].Effort != "max" {
+		t.Fatalf("master = %#v", models["master"])
+	}
+	if models["master-1m"].Name != "Master (5.6 Sol, 1M)" || models["master-1m"].Effort != "max" {
+		t.Fatalf("long-context master = %#v", models["master-1m"])
+	}
+	if models["marshal"].Name != "Marshal (5.6 Terra)" || models["marshal-1m"].Name != "Marshal (5.6 Terra, 1M)" {
+		t.Fatalf("marshal models = %#v", models)
 	}
 }
