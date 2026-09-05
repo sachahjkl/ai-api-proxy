@@ -25,7 +25,7 @@
       "id": "b39ebeb6-3369-42c3-a3a4-56a5ea44a34a",
       "title": "Ajouter GPT-6 Astra",
       "notes": "Exposer simulacra/grandmaster vers gpt-6-astra avec ses limites natives, tester, publier et déployer.",
-      "status": "doing"
+      "status": "done"
     },
     {
       "id": "721bb899-45ab-412f-8325-fa70842b0422",
