@@ -22,6 +22,12 @@
   ],
   "items": [
     {
+      "id": "f33761dd-0c4b-47ec-bc2f-bb50e0494401",
+      "title": "Configurer Simulacra dans OpenCode",
+      "notes": "Configurer le provider simulacra dans nixconfig et charger son token depuis SOPS sans secret en clair.",
+      "status": "done"
+    },
+    {
       "id": "b39ebeb6-3369-42c3-a3a4-56a5ea44a34a",
       "title": "Ajouter GPT-6 Astra",
       "notes": "Exposer simulacra/grandmaster vers gpt-6-astra avec ses limites natives, tester, publier et déployer.",
