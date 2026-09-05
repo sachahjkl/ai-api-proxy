@@ -13,7 +13,7 @@ func TestAddSimulacraCatalog(t *testing.T) {
 			"id": alias.Upstream, "name": alias.Upstream, "release_date": "2026-01-01",
 			"attachment": true, "reasoning": true,
 			"reasoning_options": []any{map[string]any{"type": "effort", "values": []string{"low", "high"}}},
-			"tool_call":         true, "limit": map[string]int{"context": 1000, "output": 100},
+			"tool_call":         true, "limit": map[string]int{"context": 1000, "input": 900, "output": 100},
 			"experimental": map[string]any{"modes": map[string]any{"fast": map[string]any{}}},
 		}
 	}
@@ -74,6 +74,13 @@ func TestAddSimulacraCatalog(t *testing.T) {
 	}
 	if longMaster.Limit.Context != 1_000_000 || longMaster.Limit.Input != 872_000 || longMaster.Limit.Output != 100 {
 		t.Fatalf("long-context master limits = %#v", longMaster.Limit)
+	}
+	grandmaster := simulacra.Models["grandmaster"]
+	if grandmaster.ID != "grandmaster" || grandmaster.Name != "Grandmaster (6 Astra)" {
+		t.Fatalf("grandmaster = %#v", grandmaster)
+	}
+	if grandmaster.Limit.Context != 1000 || grandmaster.Limit.Input != 900 || grandmaster.Limit.Output != 100 {
+		t.Fatalf("grandmaster limits = %#v", grandmaster.Limit)
 	}
 }
 

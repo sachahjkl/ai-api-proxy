@@ -29,6 +29,7 @@ The proxy exposes the authenticated Codex manifest at `/models`. It also publish
 
 | Simulacra model | Upstream model |
 | --- | --- |
+| `grandmaster` : Grandmaster (6 Astra) | `gpt-6-astra` |
 | `master` : Master (5.6 Sol) | `gpt-5.6-sol` |
 | `master-1m` : Master (5.6 Sol, 1M) | `gpt-5.6-sol` |
 | `marshal` : Marshal (5.6 Terra) | `gpt-5.6-terra` |

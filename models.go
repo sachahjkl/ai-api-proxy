@@ -13,12 +13,14 @@ import (
 )
 
 type modelAlias struct {
-	Name        string
-	Upstream    string
-	LongContext bool
+	Name         string
+	Upstream     string
+	LongContext  bool
+	NativeLimits bool
 }
 
 var modelAliases = map[string]modelAlias{
+	"grandmaster":  {Name: "Grandmaster (6 Astra)", Upstream: "gpt-6-astra", NativeLimits: true},
 	"master":       {Name: "Master (5.6 Sol)", Upstream: "gpt-5.6-sol"},
 	"master-1m":    {Name: "Master (5.6 Sol, 1M)", Upstream: "gpt-5.6-sol", LongContext: true},
 	"marshal":      {Name: "Marshal (5.6 Terra)", Upstream: "gpt-5.6-terra"},

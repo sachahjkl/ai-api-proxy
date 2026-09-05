@@ -10,7 +10,12 @@ import (
 )
 
 func TestRewriteRequestModel(t *testing.T) {
-	for _, model := range []string{"master", "master-1m"} {
+	models := map[string]string{
+		"grandmaster": "gpt-6-astra",
+		"master":      "gpt-5.6-sol",
+		"master-1m":   "gpt-5.6-sol",
+	}
+	for model, upstream := range models {
 		t.Run(model, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "/responses", strings.NewReader(`{"model":"`+model+`","input":"hello"}`))
 			if err := rewriteRequestModel(request); err != nil {
@@ -27,7 +32,7 @@ func TestRewriteRequestModel(t *testing.T) {
 			if err := json.Unmarshal(body, &value); err != nil {
 				t.Fatal(err)
 			}
-			if value.Model != "gpt-5.6-sol" || value.Input != "hello" {
+			if value.Model != upstream || value.Input != "hello" {
 				t.Fatalf("body = %s", body)
 			}
 		})
@@ -41,6 +46,7 @@ func TestRewriteModelsResponse(t *testing.T) {
 		Request:    request,
 		Header:     make(http.Header),
 		Body: io.NopCloser(strings.NewReader(`{"models":[
+			{"slug":"gpt-6-astra","display_name":"GPT-6 Astra","supported_reasoning_levels":[{"effort":"max"}]},
 			{"slug":"gpt-5.6-sol","display_name":"GPT-5.6 Sol","supported_reasoning_levels":[{"effort":"max"}]},
 			{"slug":"gpt-5.6-terra","display_name":"GPT-5.6 Terra","supported_reasoning_levels":[{"effort":"high"}]},
 			{"slug":"gpt-reserve","display_name":"GPT Reserve"}
@@ -61,7 +67,7 @@ func TestRewriteModelsResponse(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&catalog); err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog.Models) != 4 {
+	if len(catalog.Models) != 5 {
 		t.Fatalf("models = %#v", catalog.Models)
 	}
 	models := make(map[string]struct {
@@ -86,5 +92,8 @@ func TestRewriteModelsResponse(t *testing.T) {
 	}
 	if models["marshal"].Name != "Marshal (5.6 Terra)" || models["marshal-1m"].Name != "Marshal (5.6 Terra, 1M)" {
 		t.Fatalf("marshal models = %#v", models)
+	}
+	if models["grandmaster"].Name != "Grandmaster (6 Astra)" || models["grandmaster"].Effort != "max" {
+		t.Fatalf("grandmaster = %#v", models["grandmaster"])
 	}
 }
