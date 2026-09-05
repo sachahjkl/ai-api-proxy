@@ -187,7 +187,7 @@ func TestProxyAuthentication(t *testing.T) {
 	}
 }
 
-func TestHealthReportsReadyOAuthWithoutProxyAuthentication(t *testing.T) {
+func TestReadinessReportsReadyOAuth(t *testing.T) {
 	upstream, err := url.Parse(defaultUpstream)
 	if err != nil {
 		t.Fatal(err)
@@ -197,7 +197,8 @@ func TestHealthReportsReadyOAuthWithoutProxyAuthentication(t *testing.T) {
 	}}
 	handler := newHandler(config{upstream: upstream, proxyToken: "gateway-secret"}, oauth, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	request.Header.Set("Proxy-Authorization", "Bearer gateway-secret")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "application/json" {
@@ -242,7 +243,7 @@ func TestOAuthUnauthorizedStatusIsPreserved(t *testing.T) {
 		t.Fatalf("status = %d, body = %q", response.Code, response.Body.String())
 	}
 
-	healthRequest := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	healthRequest := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	healthResponse := httptest.NewRecorder()
 	handler.ServeHTTP(healthResponse, healthRequest)
 	if healthResponse.Code != http.StatusServiceUnavailable {

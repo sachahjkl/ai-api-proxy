@@ -19,9 +19,14 @@ permissions:
 
 jobs:
   check:
-    runs-on: [self-hosted, nixos]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - run: nix flake check --print-build-logs
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          extra_nix_config: |
+            system-features = nixos-test benchmark big-parallel kvm
+      - run: nix flake check --no-write-lock-file --print-build-logs

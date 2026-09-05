@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -24,6 +25,7 @@ type config struct {
 	listen              string
 	upstream            *url.URL
 	proxyToken          string
+	publicURL           string
 	oauthCredentialFile string
 	oauthStateFile      string
 }
@@ -41,28 +43,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := &http.Server{
-		Addr:              cfg.listen,
-		Handler:           newHandler(cfg, oauth, logger),
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       2 * time.Minute,
-	}
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go func() {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			logger.Error("shutdown failed", "error", err)
-		}
-	}()
-
+	listener, err := net.Listen("tcp", cfg.listen)
+	if err != nil {
+		logger.Error("listen failed", "error", err)
+		os.Exit(1)
+	}
 	logger.Info("proxy listening", "address", cfg.listen, "upstream", cfg.upstream.Redacted())
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := serve(ctx, listener, newHandler(cfg, oauth, logger), logger, 10*time.Second); err != nil {
 		logger.Error("server failed", "error", err)
 		os.Exit(1)
+	}
+	refreshCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := oauth.wait(refreshCtx); err != nil {
+		logger.Error("OAuth shutdown failed", "error", err)
 	}
 }
 
@@ -71,12 +67,26 @@ func loadConfig() (config, error) {
 	if err != nil || upstream.Scheme != "https" || upstream.Host == "" {
 		return config{}, errors.New("UPSTREAM_URL must be an absolute HTTPS URL")
 	}
-	if upstream.RawQuery != "" || upstream.Fragment != "" {
-		return config{}, errors.New("UPSTREAM_URL must not contain a query or fragment")
+	if upstream.User != nil || upstream.RawQuery != "" || upstream.ForceQuery || upstream.Fragment != "" {
+		return config{}, errors.New("UPSTREAM_URL must not contain user information, a query, or a fragment")
+	}
+	publicURL, err := url.Parse(os.Getenv("PUBLIC_URL"))
+	if err != nil || (publicURL.Scheme != "https" && publicURL.Scheme != "http") || publicURL.Host == "" {
+		return config{}, errors.New("PUBLIC_URL must be an absolute HTTP or HTTPS URL")
+	}
+	if publicURL.User != nil || publicURL.RawQuery != "" || publicURL.ForceQuery || publicURL.Fragment != "" || (publicURL.Path != "" && publicURL.Path != "/") {
+		return config{}, errors.New("PUBLIC_URL must contain only a scheme and host")
+	}
+	allowUnauthenticated := os.Getenv("ALLOW_UNAUTHENTICATED")
+	if allowUnauthenticated != "" && allowUnauthenticated != "true" && allowUnauthenticated != "false" {
+		return config{}, errors.New("ALLOW_UNAUTHENTICATED must be true or false")
 	}
 	proxyToken, err := loadProxyToken()
 	if err != nil {
 		return config{}, err
+	}
+	if proxyToken == "" && allowUnauthenticated != "true" {
+		return config{}, errors.New("a proxy token is required unless ALLOW_UNAUTHENTICATED=true")
 	}
 	oauthCredentialFile := os.Getenv("OAUTH_CREDENTIAL_FILE")
 	if oauthCredentialFile == "" {
@@ -87,7 +97,8 @@ func loadConfig() (config, error) {
 		return config{}, errors.New("OAUTH_STATE_FILE is required")
 	}
 	return config{
-		listen:              env("LISTEN_ADDR", ":8080"),
+		listen:              env("LISTEN_ADDR", "127.0.0.1:8080"),
+		publicURL:           strings.TrimRight(publicURL.String(), "/"),
 		upstream:            upstream,
 		proxyToken:          proxyToken,
 		oauthCredentialFile: oauthCredentialFile,
@@ -117,8 +128,11 @@ func loadProxyToken() (string, error) {
 }
 
 func newHandler(cfg config, oauth *oauthManager, logger *slog.Logger) http.Handler {
-	catalog := newModelCatalog()
+	catalog := newModelCatalog(cfg.publicURL)
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = 60 * time.Second
 	proxy := &httputil.ReverseProxy{
+		Transport: transport,
 		Rewrite: func(request *httputil.ProxyRequest) {
 			request.Out.Header.Del("Proxy-Authorization")
 			request.Out.Header.Del("X-Forwarded-For")
@@ -135,14 +149,31 @@ func newHandler(cfg config, oauth *oauthManager, logger *slog.Logger) http.Handl
 		FlushInterval:  -1,
 		ModifyResponse: rewriteModelsResponse,
 		ErrorHandler: func(response http.ResponseWriter, request *http.Request, err error) {
-			logger.Error("upstream request failed", "method", request.Method, "path", request.URL.Path, "error", err)
-			http.Error(response, "upstream unavailable", http.StatusBadGateway)
+			logger.Error("upstream request failed", "method", request.Method, "path", request.URL.Path)
+			status := http.StatusBadGateway
+			var sizeError *http.MaxBytesError
+			if errors.As(err, &sizeError) {
+				status = http.StatusRequestEntityTooLarge
+			}
+			http.Error(response, http.StatusText(status), status)
 		},
 	}
 
-	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		response := &responseLog{ResponseWriter: writer}
+		started := time.Now()
+		defer func() {
+			logger.Info("request completed", "method", request.Method, "path", request.URL.Path, "status", response.status, "duration_ms", time.Since(started).Milliseconds())
+		}()
 		if request.URL.Path == "/healthz" {
-			serveHealth(response, request, oauth, cfg.upstream)
+			if request.Method != http.MethodGet {
+				response.Header().Set("Allow", "GET")
+				http.Error(response, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			response.Header().Set("Cache-Control", "no-store")
+			response.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(response).Encode(map[string]string{"status": "ok", "service": "codex-proxy"})
 			return
 		}
 		if request.Method == http.MethodGet && request.URL.Path == "/api.json" {
@@ -157,9 +188,35 @@ func newHandler(cfg config, oauth *oauthManager, logger *slog.Logger) http.Handl
 			http.Error(response, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if err := rewriteRequestModel(request); err != nil {
-			http.Error(response, err.Error(), http.StatusBadRequest)
+		if request.URL.Path == "/readyz" {
+			if request.Method != http.MethodGet {
+				response.Header().Set("Allow", "GET")
+				http.Error(response, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			serveReadiness(response, request, oauth, cfg.upstream)
 			return
+		}
+		if request.ContentLength > maxRequestBytes {
+			http.Error(response, "request body exceeds size limit", http.StatusRequestEntityTooLarge)
+			return
+		}
+		if request.Body != nil {
+			request.Body = http.MaxBytesReader(response, request.Body, maxRequestBytes)
+		}
+		controller := http.NewResponseController(response)
+		_ = controller.SetReadDeadline(time.Now().Add(60 * time.Second))
+		if err := rewriteRequestModel(request); err != nil {
+			status := http.StatusBadRequest
+			var sizeError *http.MaxBytesError
+			if errors.As(err, &sizeError) {
+				status = http.StatusRequestEntityTooLarge
+			}
+			http.Error(response, http.StatusText(status), status)
+			return
+		}
+		if request.Method == http.MethodPost && request.URL.Path == "/responses" || request.Header.Get("Upgrade") != "" {
+			_ = controller.SetReadDeadline(time.Time{})
 		}
 		credential, err := oauth.current(request.Context())
 		if err != nil {
@@ -187,7 +244,7 @@ func newHandler(cfg config, oauth *oauthManager, logger *slog.Logger) http.Handl
 	})
 }
 
-func serveHealth(response http.ResponseWriter, request *http.Request, oauth *oauthManager, upstream *url.URL) {
+func serveReadiness(response http.ResponseWriter, request *http.Request, oauth *oauthManager, upstream *url.URL) {
 	type check struct {
 		Status    string `json:"status"`
 		ExpiresAt string `json:"expires_at,omitempty"`

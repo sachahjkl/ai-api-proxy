@@ -14,7 +14,9 @@ func TestOAuthManagerRefreshesAndPersistsCredential(t *testing.T) {
 	var received url.Values
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if err := request.ParseForm(); err != nil {
-			t.Fatal(err)
+			t.Error(err)
+			http.Error(response, "invalid form", http.StatusBadRequest)
+			return
 		}
 		received = request.PostForm
 		response.Header().Set("Content-Type", "application/json")

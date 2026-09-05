@@ -3,10 +3,13 @@ package main
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
-func TestAddSimulacraCatalog(t *testing.T) {
+func catalogFixture(t testing.TB) []byte {
+	t.Helper()
 	openAIModels := make(map[string]any, len(modelAliases))
 	for _, alias := range modelAliases {
 		openAIModels[alias.Upstream] = map[string]any{
@@ -24,8 +27,11 @@ func TestAddSimulacraCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return source
+}
 
-	body, err := addSimulacraCatalog(source, "https://codex.example.test")
+func TestAddSimulacraCatalog(t *testing.T) {
+	body, err := addSimulacraCatalog(catalogFixture(t), "https://codex.example.test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,11 +90,22 @@ func TestAddSimulacraCatalog(t *testing.T) {
 	}
 }
 
-func TestRequestOriginUsesForwardedOrigin(t *testing.T) {
-	request := httptest.NewRequest("GET", "http://127.0.0.1/api.json", nil)
-	request.Header.Set("X-Forwarded-Proto", "https")
-	request.Header.Set("X-Forwarded-Host", "codex.example.test")
-	if origin := requestOrigin(request); origin != "https://codex.example.test" {
-		t.Fatalf("origin = %q", origin)
+func TestCatalogIgnoresForwardedOrigin(t *testing.T) {
+	body, err := addSimulacraCatalog(catalogFixture(t), "https://codex.example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog := newModelCatalog("https://codex.example.test")
+	catalog.body = body
+	catalog.expires = time.Now().Add(time.Hour)
+	request := httptest.NewRequest("GET", "http://attacker.test/api.json", nil)
+	request.Header.Set("X-Forwarded-Proto", "http")
+	request.Header.Set("X-Forwarded-Host", "attacker.test")
+	response := httptest.NewRecorder()
+	if err := catalog.serve(response, request); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(response.Body.String(), "attacker.test") || !strings.Contains(response.Body.String(), "https://codex.example.test") {
+		t.Fatalf("unexpected catalog origin: %s", response.Body.String())
 	}
 }

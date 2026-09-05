@@ -7,10 +7,10 @@
   };
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
-    flake-utils.url = "github:numtide/flake-utils";
+    nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.2605";
+    flake-utils.url = "https://flakehub.com/f/numtide/flake-utils/0.1";
     git-hooks = {
-      url = "github:cachix/git-hooks.nix";
+      url = "https://flakehub.com/f/cachix/git-hooks.nix/0.1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -25,7 +25,7 @@
       pkgs = nixpkgs.legacyPackages.${system};
       src = pkgs.lib.fileset.toSource {
         root = ./.;
-        fileset = pkgs.lib.fileset.unions [./catalog.go ./catalog_test.go ./go.mod ./main.go ./main_test.go ./models.go ./models_test.go ./oauth.go ./oauth_test.go];
+        fileset = pkgs.lib.fileset.unions [./go.mod (pkgs.lib.fileset.fileFilter (file: file.hasExt "go") ./.)];
       };
       package = pkgs.buildGoModule {
         pname = "codex-proxy";
@@ -41,21 +41,27 @@
       };
       goCheck =
         pkgs.runCommand "codex-proxy-go-check" {
-          CGO_ENABLED = 0;
-          nativeBuildInputs = [pkgs.go];
+          CGO_ENABLED = 1;
+          nativeBuildInputs = [pkgs.go pkgs.stdenv.cc];
         } ''
           cp -r ${src} source
           chmod -R u+w source
           cd source
           export HOME="$TMPDIR"
           go vet ./...
-          go test ./...
+          go test -race -timeout 120s ./...
           touch "$out"
         '';
       dockerImage = pkgs.dockerTools.buildLayeredImage {
         name = "codex-proxy";
         tag = package.version;
         contents = [package pkgs.cacert];
+        fakeRootCommands = ''
+          mkdir -p var/lib/codex-proxy
+          chmod 0700 var/lib/codex-proxy
+          chown 65532:65532 var/lib/codex-proxy
+        '';
+        enableFakechroot = true;
         config = {
           Cmd = ["${package}/bin/codex-proxy"];
           Env = [
@@ -70,9 +76,11 @@
         package = pkgs.prek;
         src = ./.;
         hooks = {
+          actionlint.enable = true;
           alejandra.enable = true;
           check-added-large-files.enable = true;
           check-merge-conflicts.enable = true;
+          check-json.enable = true;
           check-yaml.enable = true;
           deadnix.enable = true;
           end-of-file-fixer.enable = true;
@@ -97,11 +105,15 @@
         build = package;
         go = goCheck;
         pre-commit = preCommitCheck;
+        deployment = import ./tests/deployment.nix {
+          inherit pkgs dockerImage package;
+          module = self.nixosModules.default;
+        };
       };
 
       devShells.default = pkgs.mkShell {
-        CGO_ENABLED = 0;
-        packages = preCommitCheck.enabledPackages ++ [pkgs.go];
+        CGO_ENABLED = 1;
+        packages = preCommitCheck.enabledPackages ++ [pkgs.go pkgs.stdenv.cc];
         inherit (preCommitCheck) shellHook;
       };
 
@@ -128,6 +140,15 @@
             default = "127.0.0.1:8080";
             description = "Address and port the proxy listens on.";
           };
+          publicUrl = lib.mkOption {
+            type = lib.types.str;
+            description = "Public HTTP or HTTPS origin advertised in the model catalog.";
+          };
+          allowUnauthenticated = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            description = "Allow requests without a proxy token on an access-controlled network.";
+          };
           upstreamUrl = lib.mkOption {
             type = lib.types.str;
             default = "https://chatgpt.com/backend-api/codex";
@@ -145,6 +166,12 @@
         };
 
         config = lib.mkIf cfg.enable {
+          assertions = [
+            {
+              assertion = cfg.proxyTokenFile != null || cfg.allowUnauthenticated;
+              message = "codex-proxy requires proxyTokenFile unless allowUnauthenticated is enabled.";
+            }
+          ];
           systemd.services.codex-proxy = {
             description = "Codex subscription reverse proxy";
             after = ["network-online.target"];
@@ -152,6 +179,8 @@
             wantedBy = ["multi-user.target"];
             environment = {
               LISTEN_ADDR = cfg.listenAddress;
+              PUBLIC_URL = cfg.publicUrl;
+              ALLOW_UNAUTHENTICATED = lib.boolToString cfg.allowUnauthenticated;
               OAUTH_STATE_FILE = "/var/lib/codex-proxy/oauth.json";
               UPSTREAM_URL = cfg.upstreamUrl;
             };
@@ -172,6 +201,8 @@
               ProtectKernelTunables = true;
               ProtectSystem = "strict";
               Restart = "on-failure";
+              RestartSec = "5s";
+              TimeoutStopSec = "25s";
               RestrictAddressFamilies = ["AF_INET" "AF_INET6"];
               RestrictNamespaces = true;
               RestrictRealtime = true;

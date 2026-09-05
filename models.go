@@ -38,7 +38,7 @@ func rewriteRequestModel(request *http.Request) error {
 	}
 	body, err := io.ReadAll(request.Body)
 	if err != nil {
-		return errors.New("cannot read request body")
+		return fmt.Errorf("cannot read request body: %w", err)
 	}
 	request.Body.Close()
 	request.Body = io.NopCloser(bytes.NewReader(body))
@@ -73,11 +73,11 @@ func rewriteModelsResponse(response *http.Response) error {
 	if response.StatusCode != http.StatusOK || !strings.HasSuffix(response.Request.URL.Path, "/models") {
 		return nil
 	}
-	body, err := io.ReadAll(response.Body)
+	defer response.Body.Close()
+	body, err := readLimited(response.Body, maxCatalogBytes)
 	if err != nil {
-		return errors.New("cannot read model catalog")
+		return errors.New("cannot read model catalog or catalog exceeds size limit")
 	}
-	response.Body.Close()
 
 	var catalog map[string]json.RawMessage
 	if err := json.Unmarshal(body, &catalog); err != nil {

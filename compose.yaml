@@ -1,9 +1,15 @@
 services:
   codex-proxy:
-    build: .
+    image: codex-proxy:0.1.0
+    pull_policy: never
     restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 25s
     environment:
       LISTEN_ADDR: :8080
+      PUBLIC_URL: ${PUBLIC_URL:?set PUBLIC_URL}
       OAUTH_CREDENTIAL_FILE: /run/secrets/oauth.json
       OAUTH_STATE_FILE: /var/lib/codex-proxy/oauth.json
       PROXY_TOKEN: ${PROXY_TOKEN:?set PROXY_TOKEN}

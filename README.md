@@ -1,105 +1,183 @@
 # Codex subscription reverse proxy
 
-This service forwards OpenCode traffic to the Codex backend used by a ChatGPT Plus or Pro subscription. It is not a proxy for the standard OpenAI API.
+This service forwards requests to the Codex backend used by a ChatGPT Plus or Pro subscription. It does not proxy the standard OpenAI API.
 
-Its behavior comes from the OpenAI provider in OpenCode V2 at `opencode/packages/core/src/plugin/provider/openai.ts`:
+The proxy owns the ChatGPT OAuth credential and refreshes its access token. Clients authenticate with a separate proxy token.
 
-- upstream: `https://chatgpt.com/backend-api/codex`;
-- main endpoint: `/responses`;
-- upstream authentication: ChatGPT OAuth token in `Authorization`;
-- context: `chatgpt-account-id`, `originator`, and `session-id`;
-- SSE streaming responses and, when the client uses it, WebSocket.
+## Deployment
 
-The proxy stores the ChatGPT OAuth credential and refreshes the access token. Clients send only the proxy shared secret.
+The primary deployment uses the NixOS module through `../nixconfig`. Both the NixOS service and the Docker image use the same Nix-built executable.
 
-The initial OAuth file contains this JSON:
-
-```json
-{
-  "access": "jeton-acces",
-  "refresh": "jeton-renouvellement",
-  "expires": 1787824843000,
-  "account_id": "identifiant-compte"
-}
+```nix
+services.codex-proxy = {
+  enable = true;
+  listenAddress = "127.0.0.1:8083";
+  publicUrl = "https://codex.sacha.house";
+  proxyTokenFile = "/run/secrets/codex-proxy/token";
+  oauthCredentialFile = "/run/secrets/codex-proxy/oauth";
+};
 ```
 
-The proxy stores refreshed tokens in `OAUTH_STATE_FILE`. Protect the initial file and the state directory.
+Use runtime secret paths, not Nix store files, for real credentials. The module loads secrets through systemd credentials.
 
-The proxy exposes the authenticated Codex manifest at `/models`. It also publishes a complete OpenCode catalog at `/api.json`.
+The service stores refreshed credentials in `/var/lib/codex-proxy/oauth.json`. systemd creates a private state directory for the service user.
 
-| Simulacra model | Upstream model |
-| --- | --- |
-| `grandmaster` : Grandmaster (6 Astra) | `gpt-6-astra` |
-| `master` : Master (5.6 Sol) | `gpt-5.6-sol` |
-| `master-1m` : Master (5.6 Sol, 1M) | `gpt-5.6-sol` |
-| `marshal` : Marshal (5.6 Terra) | `gpt-5.6-terra` |
-| `marshal-1m` : Marshal (5.6 Terra, 1M) | `gpt-5.6-terra` |
-| `commander` : Commander (5.6 Luna) | `gpt-5.6-luna` |
-| `commander-1m` : Commander (5.6 Luna, 1M) | `gpt-5.6-luna` |
-| `general` : General (5.5) | `gpt-5.5` |
-| `captain` : Captain (5.4) | `gpt-5.4` |
-| `scout` : Scout (5.4 Mini) | `gpt-5.4-mini` |
+The integration in `../nixconfig/services/codex-proxy-service.mod.nix` sets the public URL and uses SOPS-managed credential paths.
 
-A `/responses` request can use a Simulacra identifier. The proxy replaces it with the corresponding upstream identifier.
+### Coordinated input update
 
-The `-1m` GPT-5.6 aliases advertise the optional Codex OAuth long-context window: 1,000,000 context tokens, including 872,000 input tokens and 128,000 output tokens. The aliases without `-1m` retain the conservative 400,000-token context limit.
+This version requires `publicUrl` in the NixOS module. The matching `../nixconfig` change requires this version of the proxy input.
 
-## Getting Started
+After publishing the proxy revision, update the `ai-api-proxy` input in `../nixconfig`. Review the lock-file change before deployment.
+
+For local validation without changing the production pin:
 
 ```sh
-go test ./...
-go run .
+nix eval 'path:../nixconfig#nixosConfigurations.homelab.config.systemd.services.codex-proxy.environment' \
+  --json --override-input ai-api-proxy "path:$PWD" --no-write-lock-file
 ```
 
-With Nix:
+## Development
+
+Use the development shell for project commands:
 
 ```sh
 nix develop
-nix flake check
-nix run
+
+gofmt -w *.go
+go test -race -timeout 120s ./...
+go vet ./...
+prek run --all-files
+nix flake check "path:$PWD" --no-write-lock-file
 ```
 
-Variables:
+The shell includes Go, a C compiler for race detection, formatters, and Git hooks. Nix builds the deployed executable with CGO disabled.
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `LISTEN_ADDR` | `:8080` | HTTP listen address |
-| `UPSTREAM_URL` | `https://chatgpt.com/backend-api/codex` | Fixed HTTPS upstream |
-| `PROXY_TOKEN` | empty | Optional shared secret |
-| `PROXY_TOKEN_FILE` | empty | File containing the shared secret |
-| `OAUTH_CREDENTIAL_FILE` | required | JSON file containing the ChatGPT OAuth credential |
-| `OAUTH_STATE_FILE` | required | Persistent file for refreshed tokens |
+Flake checks cover the executable, race tests, Git hooks, Docker image, and a NixOS deployment test. The deployment test requires a Linux builder with KVM.
 
-When `PROXY_TOKEN` is set, the client must send `Proxy-Authorization: Bearer <secret>`. The proxy removes this header before the request to OpenAI. The `Authorization` header remains reserved for the ChatGPT OAuth token.
+CI runs on disposable GitHub-hosted runners rather than the deployment host.
 
-Do not use `PROXY_TOKEN` and `PROXY_TOKEN_FILE` together. The NixOS module uses `PROXY_TOKEN_FILE` with a systemd credential.
-
-## Health
-
-`GET /healthz` does not require proxy authentication. It verifies that the OAuth credential is usable and refreshes an expired credential when necessary. It returns JSON with HTTP 200 when OAuth is ready, or HTTP 503 when OAuth is unavailable.
-
-If the OAuth server rejects a refresh with HTTP 401, model requests also return HTTP 401 instead of HTTP 502.
-
-For Docker:
+Run fuzz tests separately:
 
 ```sh
-export PROXY_TOKEN='un-secret-long-et-aleatoire'
-export OAUTH_CREDENTIAL_FILE="$PWD/oauth.json"
-docker compose up -d --build
-curl http://127.0.0.1:8080/healthz
+go test -run '^$' -fuzz '^FuzzCatalog$' -fuzztime 10s -parallel 2
+go test -run '^$' -fuzz '^FuzzRequestModel$' -fuzztime 10s -parallel 2
 ```
 
-The Compose port is exposed only on loopback. Publish it with Caddy, Traefik, or your VPN solution. Use HTTPS unless all HTTP traffic stays within an encrypted tunnel such as WireGuard or Tailscale.
+### Local startup
 
-Caddy example:
+Create a seed credential outside the repository. Use this schema:
 
-```caddyfile
-codex-proxy.example.net {
-    reverse_proxy 127.0.0.1:8080
+```json
+{
+  "access": "access-token",
+  "refresh": "refresh-token",
+  "expires": 1787824843000,
+  "account_id": "account-id"
 }
 ```
 
-## OpenCode V2 Configuration
+`expires` is a Unix timestamp in milliseconds. The example values are placeholders, not usable credentials.
+
+```sh
+export OAUTH_CREDENTIAL_FILE="$HOME/.config/codex-proxy/oauth.json"
+export OAUTH_STATE_FILE="$HOME/.local/state/codex-proxy/oauth.json"
+export PUBLIC_URL="http://127.0.0.1:8080"
+export PROXY_TOKEN_FILE="$HOME/.config/codex-proxy/token"
+chmod 600 "$OAUTH_CREDENTIAL_FILE" "$PROXY_TOKEN_FILE"
+nix develop --command go run .
+```
+
+## Configuration
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `LISTEN_ADDR` | `127.0.0.1:8080` | HTTP listen address |
+| `PUBLIC_URL` | required | Public HTTP or HTTPS origin advertised in `/api.json` |
+| `UPSTREAM_URL` | `https://chatgpt.com/backend-api/codex` | Fixed HTTPS upstream |
+| `PROXY_TOKEN` | empty | Shared proxy token |
+| `PROXY_TOKEN_FILE` | empty | File containing the shared proxy token |
+| `ALLOW_UNAUTHENTICATED` | `false` | Explicitly permit requests without a proxy token |
+| `OAUTH_CREDENTIAL_FILE` | required | Seed ChatGPT OAuth credential file |
+| `OAUTH_STATE_FILE` | required | Persistent file for refreshed credentials |
+
+Set either `PROXY_TOKEN` or `PROXY_TOKEN_FILE`, not both. Clients send `Proxy-Authorization: Bearer <secret>`.
+
+The proxy removes this header before forwarding. It replaces client `Authorization` and account headers with its own OAuth credential.
+
+`PUBLIC_URL` contains only a scheme and host, with an optional port. The proxy ignores forwarded-origin headers when generating the catalog.
+
+For an access-controlled VPN deployment without a token, explicitly set `ALLOW_UNAUTHENTICATED=true`. The NixOS equivalent is `allowUnauthenticated = true`.
+
+## Docker
+
+Nix generates the only container image through `dockerTools.buildLayeredImage`. There is no separate Dockerfile build.
+
+```sh
+nix build .#dockerImage
+docker load < result
+export PUBLIC_URL="https://codex-proxy.example.net"
+export PROXY_TOKEN='replace-with-a-random-secret'
+export OAUTH_CREDENTIAL_FILE="/secure/path/oauth.json"
+docker compose up -d
+```
+
+The image runs as UID and GID `65532`. Its state directory belongs to that user and has mode `0700`.
+
+For Docker, prepare a dedicated seed-file copy outside the repository. Set its owner to `65532:65532` and its mode to `0400`.
+
+Do not change ownership of the secret managed by the NixOS deployment. Docker and NixOS must not run concurrently with the same rotating credential.
+
+Compose uses a persistent state volume and publishes its HTTP port only on loopback. The container filesystem is read-only except for the state volume.
+
+For an existing volume, check its ownership before startup. Fresh volumes inherit the image's state-directory ownership.
+
+## Health and shutdown
+
+- `GET /healthz` reports local process liveness without authentication or external calls.
+- `GET /readyz` checks OAuth readiness and requires the configured proxy authentication.
+- Readiness returns HTTP 200 when credentials are usable, or HTTP 503 when refresh or persistence fails.
+
+Readiness does not test model availability or send an inference request. It includes the credential expiry time but never includes tokens.
+
+OAuth refresh has a ten-second deadline. Concurrent requests share one refresh, and waiting clients can cancel independently.
+
+After refresh or persistence failure, requests receive an error during a thirty-second retry delay. Successful token rotation is retained in memory despite persistence failure.
+
+On SIGTERM, the server waits up to ten seconds for HTTP requests. It then closes remaining connections, including upgraded WebSocket connections.
+
+The process also waits up to ten seconds for an active OAuth update. systemd and Compose allow twenty-five seconds before forced termination.
+
+## Models and transports
+
+The authenticated `/models` endpoint publishes the mapped Codex manifest. The public `/api.json` endpoint adds Simulacra to the OpenCode model catalog.
+
+| Simulacra model | Upstream model |
+| --- | --- |
+| `grandmaster`: Grandmaster (6 Astra) | `gpt-6-astra` |
+| `master`: Master (5.6 Sol) | `gpt-5.6-sol` |
+| `master-1m`: Master (5.6 Sol, 1M) | `gpt-5.6-sol` |
+| `marshal`: Marshal (5.6 Terra) | `gpt-5.6-terra` |
+| `marshal-1m`: Marshal (5.6 Terra, 1M) | `gpt-5.6-terra` |
+| `commander`: Commander (5.6 Luna) | `gpt-5.6-luna` |
+| `commander-1m`: Commander (5.6 Luna, 1M) | `gpt-5.6-luna` |
+| `general`: General (5.5) | `gpt-5.5` |
+| `captain`: Captain (5.4) | `gpt-5.4` |
+| `scout`: Scout (5.4 Mini) | `gpt-5.4-mini` |
+
+HTTP POST requests to `/responses` translate Simulacra model identifiers. SSE responses stream without buffering.
+
+WebSocket connections pass through without message rewriting. Use native upstream model identifiers inside WebSocket messages, not Simulacra aliases.
+
+The `-1m` aliases advertise 1,000,000 context tokens and 872,000 input tokens. Other aliases advertise 400,000 context tokens and 272,000 input tokens, except `grandmaster`, which retains native limits.
+
+Output limits come from the upstream model catalog. All configured model aliases must exist in that catalog before `/api.json` becomes available.
+
+The proxy validates catalogs before caching them for five minutes. A failed fetch has a thirty-second retry delay and does not replace cached data.
+
+Expired cached data is not served. Invalid or oversized catalogs return HTTP 502.
+
+## OpenCode V2 configuration
 
 Set the catalog source before starting OpenCode:
 
@@ -107,7 +185,7 @@ Set the catalog source before starting OpenCode:
 export OPENCODE_MODELS_URL="https://codex-proxy.example.net"
 ```
 
-The OpenCode client does not need a ChatGPT connection. Add this configuration without a `models` block:
+The client does not need a ChatGPT connection. Add this configuration without a `models` block:
 
 ```jsonc
 {
@@ -119,23 +197,45 @@ The OpenCode client does not need a ChatGPT connection. Add this configuration w
         "apiKey": "unused"
       },
       "headers": {
-        "Proxy-Authorization": "Bearer un-secret-long-et-aleatoire"
+        "Proxy-Authorization": "Bearer replace-with-a-random-secret"
       }
     }
   }
 }
 ```
 
-`apiKey` satisfies the local OpenAI provider. The proxy removes the generated `Authorization` and injects its own OAuth token.
+`apiKey` satisfies the local OpenAI provider. The proxy replaces the generated `Authorization` header with its own OAuth token.
 
-If access is already restricted to the VPN, leave `PROXY_TOKEN` empty and remove `headers` from the configuration.
+Do not add `/backend-api/codex` to the client URL. The proxy adds that prefix to upstream requests.
 
-Do not put `/backend-api/codex` in `baseURL`: the proxy adds this prefix. An OpenCode request to `/responses` becomes an upstream request to `/backend-api/codex/responses`.
+## Credential recovery
 
-## Security Limits
+Only one proxy process can own a rotating OAuth credential. Do not share its refresh token with another proxy or an independently refreshing client.
 
-- Anyone who has `PROXY_TOKEN` can use the centralized Codex subscription.
-- Anyone who controls the proxy can read prompts, responses, and the OAuth credential.
-- The included logs record neither headers nor bodies. Also check the logging configuration of the TLS reverse proxy in front of this service.
-- Do not publish this service directly on the Internet without TLS and access control.
+The state file takes precedence over the seed file. Replacing only the seed does not replace existing persisted credentials.
+
+If persistence fails, restore directory access or disk space while the process remains running. The next request after the retry delay retries persistence without rotating again.
+
+If the refresh token is revoked or recovery requires a new login:
+
+1. Stop the proxy.
+2. Obtain a new OAuth credential through the authorized login flow.
+3. Replace the seed secret through the deployment's secret manager.
+4. Remove the obsolete state file from the proxy's private state directory.
+5. Start the proxy.
+6. Check authenticated `/readyz` and inspect the service logs.
+
+On NixOS, use the service's resolved state path. Dynamic-user state can reside under `/var/lib/private/codex-proxy`.
+
+## Security and resource limits
+
+- Anyone with the proxy token can consume the centralized subscription.
+- Anyone controlling the proxy can read prompts, responses, and OAuth credentials.
+- Request bodies are limited to 32 MiB. Oversized `/responses` requests return HTTP 413.
+- Request uploads have a sixty-second deadline. Upstream response headers have a separate sixty-second deadline.
+- Model catalogs are limited to 16 MiB. OAuth refresh responses are limited to 1 MiB.
+- Established SSE and WebSocket streams have no total duration limit.
+- Logs contain request methods, paths, statuses, and durations, but not headers, query strings, or bodies.
+- Use TLS and access control before publishing the service. An encrypted VPN can provide both.
+- Check the logging configuration of any reverse proxy in front of this service.
 - Use remains subject to the ChatGPT and Codex terms of service.

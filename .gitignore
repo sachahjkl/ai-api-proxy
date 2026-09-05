@@ -2,3 +2,6 @@
 /.pre-commit-config.yaml
 /opencode/
 /result
+/oauth*.json
+/.env
+/state/
