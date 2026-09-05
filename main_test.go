@@ -187,17 +187,76 @@ func TestProxyAuthentication(t *testing.T) {
 	}
 }
 
-func TestHealthDoesNotRequireAuthentication(t *testing.T) {
+func TestHealthReportsReadyOAuthWithoutProxyAuthentication(t *testing.T) {
 	upstream, err := url.Parse(defaultUpstream)
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := newHandler(config{upstream: upstream, proxyToken: "gateway-secret"}, &oauthManager{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	oauth := &oauthManager{credential: oauthCredential{
+		Access: "access", Refresh: "refresh", Expires: time.Now().Add(time.Hour).UnixMilli(), AccountID: "account",
+	}}
+	handler := newHandler(config{upstream: upstream, proxyToken: "gateway-secret"}, oauth, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || response.Body.String() != "ok\n" {
+	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "application/json" {
 		t.Fatalf("status = %d, body = %q", response.Code, response.Body.String())
+	}
+	var health struct {
+		Status string `json:"status"`
+		Checks map[string]struct {
+			Status    string `json:"status"`
+			ExpiresAt string `json:"expires_at"`
+		} `json:"checks"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&health); err != nil {
+		t.Fatal(err)
+	}
+	if health.Status != "ok" || health.Checks["oauth"].Status != "ready" || health.Checks["oauth"].ExpiresAt == "" {
+		t.Fatalf("health = %#v", health)
+	}
+}
+
+func TestOAuthUnauthorizedStatusIsPreserved(t *testing.T) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer tokenServer.Close()
+
+	upstream, err := url.Parse(defaultUpstream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oauth := &oauthManager{
+		credential: oauthCredential{Access: "expired", Refresh: "revoked", Expires: time.Now().Add(-time.Hour).UnixMilli(), AccountID: "account"},
+		client:     tokenServer.Client(),
+		tokenURL:   tokenServer.URL,
+	}
+	handler := newHandler(config{upstream: upstream}, oauth, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	request := httptest.NewRequest(http.MethodPost, "/responses", strings.NewReader(`{"model":"master"}`))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, body = %q", response.Code, response.Body.String())
+	}
+
+	healthRequest := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	healthResponse := httptest.NewRecorder()
+	handler.ServeHTTP(healthResponse, healthRequest)
+	if healthResponse.Code != http.StatusServiceUnavailable {
+		t.Fatalf("health status = %d, body = %q", healthResponse.Code, healthResponse.Body.String())
+	}
+	var health struct {
+		Checks map[string]struct {
+			Status string `json:"status"`
+		} `json:"checks"`
+	}
+	if err := json.NewDecoder(healthResponse.Body).Decode(&health); err != nil {
+		t.Fatal(err)
+	}
+	if health.Checks["oauth"].Status != "unauthorized" {
+		t.Fatalf("health = %#v", health)
 	}
 }

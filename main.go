@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -141,9 +142,7 @@ func newHandler(cfg config, oauth *oauthManager, logger *slog.Logger) http.Handl
 
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.URL.Path == "/healthz" {
-			response.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			response.WriteHeader(http.StatusOK)
-			_, _ = response.Write([]byte("ok\n"))
+			serveHealth(response, request, oauth, cfg.upstream)
 			return
 		}
 		if request.Method == http.MethodGet && request.URL.Path == "/api.json" {
@@ -165,7 +164,12 @@ func newHandler(cfg config, oauth *oauthManager, logger *slog.Logger) http.Handl
 		credential, err := oauth.current(request.Context())
 		if err != nil {
 			logger.Error("OAuth credential unavailable", "error", err)
-			http.Error(response, "upstream authentication unavailable", http.StatusBadGateway)
+			status := http.StatusBadGateway
+			var refreshError *oauthRefreshError
+			if errors.As(err, &refreshError) && refreshError.StatusCode == http.StatusUnauthorized {
+				status = http.StatusUnauthorized
+			}
+			http.Error(response, "upstream authentication unavailable", status)
 			return
 		}
 		sessionID, err := newSessionID()
@@ -181,6 +185,47 @@ func newHandler(cfg config, oauth *oauthManager, logger *slog.Logger) http.Handl
 		logger.Info("proxying request", "method", request.Method, "path", request.URL.Path)
 		proxy.ServeHTTP(response, request)
 	})
+}
+
+func serveHealth(response http.ResponseWriter, request *http.Request, oauth *oauthManager, upstream *url.URL) {
+	type check struct {
+		Status    string `json:"status"`
+		ExpiresAt string `json:"expires_at,omitempty"`
+	}
+	body := struct {
+		Status   string           `json:"status"`
+		Service  string           `json:"service"`
+		Upstream string           `json:"upstream"`
+		Checks   map[string]check `json:"checks"`
+	}{
+		Status:   "ok",
+		Service:  "codex-proxy",
+		Upstream: upstream.Redacted(),
+		Checks:   make(map[string]check, 1),
+	}
+
+	status := http.StatusOK
+	credential, err := oauth.current(request.Context())
+	if err != nil {
+		body.Status = "unhealthy"
+		oauthStatus := "unavailable"
+		var refreshError *oauthRefreshError
+		if errors.As(err, &refreshError) && refreshError.StatusCode == http.StatusUnauthorized {
+			oauthStatus = "unauthorized"
+		}
+		body.Checks["oauth"] = check{Status: oauthStatus}
+		status = http.StatusServiceUnavailable
+	} else {
+		body.Checks["oauth"] = check{
+			Status:    "ready",
+			ExpiresAt: time.UnixMilli(credential.Expires).UTC().Format(time.RFC3339),
+		}
+	}
+
+	response.Header().Set("Cache-Control", "no-store")
+	response.Header().Set("Content-Type", "application/json")
+	response.WriteHeader(status)
+	_ = json.NewEncoder(response).Encode(body)
 }
 
 func newSessionID() (string, error) {

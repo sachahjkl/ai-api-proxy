@@ -73,6 +73,12 @@ When `PROXY_TOKEN` is set, the client must send `Proxy-Authorization: Bearer <se
 
 Do not use `PROXY_TOKEN` and `PROXY_TOKEN_FILE` together. The NixOS module uses `PROXY_TOKEN_FILE` with a systemd credential.
 
+## Health
+
+`GET /healthz` does not require proxy authentication. It verifies that the OAuth credential is usable and refreshes an expired credential when necessary. It returns JSON with HTTP 200 when OAuth is ready, or HTTP 503 when OAuth is unavailable.
+
+If the OAuth server rejects a refresh with HTTP 401, model requests also return HTTP 401 instead of HTTP 502.
+
 For Docker:
 
 ```sh

@@ -27,6 +27,14 @@ type oauthCredential struct {
 	AccountID string `json:"account_id"`
 }
 
+type oauthRefreshError struct {
+	StatusCode int
+}
+
+func (err *oauthRefreshError) Error() string {
+	return fmt.Sprintf("OAuth refresh failed with status %d", err.StatusCode)
+}
+
 type oauthManager struct {
 	mu         sync.Mutex
 	credential oauthCredential
@@ -86,7 +94,7 @@ func (manager *oauthManager) refresh(ctx context.Context) error {
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		_, _ = io.Copy(io.Discard, response.Body)
-		return fmt.Errorf("OAuth refresh failed with status %d", response.StatusCode)
+		return &oauthRefreshError{StatusCode: response.StatusCode}
 	}
 
 	var result struct {
