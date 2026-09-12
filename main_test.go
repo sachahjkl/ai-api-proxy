@@ -63,7 +63,7 @@ func TestProxyForwardsCodexRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	request.Header.Set("Authorization", "Bearer chatgpt-oauth-token")
-	request.Header.Set("Proxy-Authorization", "Bearer gateway-secret")
+	request.Header.Set("X-Codex-Authorization", "Bearer gateway-secret")
 	request.Header.Set("ChatGPT-Account-ID", "acct_123")
 	request.Header.Set("X-Forwarded-For", "spoofed")
 	response, err := http.DefaultClient.Do(request)
@@ -84,8 +84,8 @@ func TestProxyForwardsCodexRequest(t *testing.T) {
 	if received.Header.Get("Authorization") != "Bearer server-oauth-token" {
 		t.Errorf("Authorization = %q", received.Header.Get("Authorization"))
 	}
-	if received.Header.Get("Proxy-Authorization") != "" {
-		t.Error("Proxy-Authorization leaked upstream")
+	if received.Header.Get("X-Codex-Authorization") != "" {
+		t.Error("X-Codex-Authorization leaked upstream")
 	}
 	if strings.Contains(received.Header.Get("X-Forwarded-For"), "spoofed") {
 		t.Errorf("spoofed X-Forwarded-For was preserved: %q", received.Header.Get("X-Forwarded-For"))
@@ -198,7 +198,7 @@ func TestReadinessReportsReadyOAuth(t *testing.T) {
 	handler := newHandler(config{upstream: upstream, proxyToken: "gateway-secret"}, oauth, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
-	request.Header.Set("Proxy-Authorization", "Bearer gateway-secret")
+	request.Header.Set("X-Codex-Authorization", "Bearer gateway-secret")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "application/json" {

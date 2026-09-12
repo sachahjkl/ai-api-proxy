@@ -101,7 +101,7 @@ nix develop --command go run .
 | `OAUTH_CREDENTIAL_FILE` | required | Seed ChatGPT OAuth credential file |
 | `OAUTH_STATE_FILE` | required | Persistent file for refreshed credentials |
 
-Set either `PROXY_TOKEN` or `PROXY_TOKEN_FILE`, not both. Clients send `Proxy-Authorization: Bearer <secret>`.
+Set either `PROXY_TOKEN` or `PROXY_TOKEN_FILE`, not both. Clients send `X-Codex-Authorization: Bearer <secret>`.
 
 The proxy removes this header before forwarding. It replaces client `Authorization` and account headers with its own OAuth credential.
 
@@ -197,7 +197,7 @@ The client does not need a ChatGPT connection. Add this configuration without a 
         "apiKey": "unused"
       },
       "headers": {
-        "Proxy-Authorization": "Bearer replace-with-a-random-secret"
+        "X-Codex-Authorization": "Bearer replace-with-a-random-secret"
       }
     }
   }

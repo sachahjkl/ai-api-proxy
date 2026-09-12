@@ -134,7 +134,7 @@ func newHandler(cfg config, oauth *oauthManager, logger *slog.Logger) http.Handl
 	proxy := &httputil.ReverseProxy{
 		Transport: transport,
 		Rewrite: func(request *httputil.ProxyRequest) {
-			request.Out.Header.Del("Proxy-Authorization")
+			request.Out.Header.Del("X-Codex-Authorization")
 			request.Out.Header.Del("X-Forwarded-For")
 			request.Out.Header.Del("X-Forwarded-Host")
 			request.Out.Header.Del("X-Forwarded-Proto")
@@ -183,7 +183,7 @@ func newHandler(cfg config, oauth *oauthManager, logger *slog.Logger) http.Handl
 			}
 			return
 		}
-		if cfg.proxyToken != "" && !validProxyToken(request.Header.Get("Proxy-Authorization"), cfg.proxyToken) {
+		if cfg.proxyToken != "" && !validProxyToken(request.Header.Get("X-Codex-Authorization"), cfg.proxyToken) {
 			response.Header().Set("WWW-Authenticate", `Bearer realm="codex-proxy"`)
 			http.Error(response, "unauthorized", http.StatusUnauthorized)
 			return

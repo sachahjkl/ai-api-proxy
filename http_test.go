@@ -93,7 +93,7 @@ func TestProxyWebSocketTunnelAndShutdown(t *testing.T) {
 	upstreamDone := make(chan struct{})
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer close(upstreamDone)
-		if r.Header.Get("Authorization") != "Bearer access" || r.Header.Get("Proxy-Authorization") != "" {
+		if r.Header.Get("Authorization") != "Bearer access" || r.Header.Get("X-Codex-Authorization") != "" {
 			t.Error("incorrect upgrade authentication")
 		}
 		connection, buffer, err := http.NewResponseController(w).Hijack()
@@ -135,7 +135,7 @@ func TestProxyWebSocketTunnelAndShutdown(t *testing.T) {
 	}
 	defer connection.Close()
 	_ = connection.SetDeadline(time.Now().Add(5 * time.Second))
-	_, err = io.WriteString(connection, "GET /responses HTTP/1.1\r\nHost: proxy.test\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nProxy-Authorization: Bearer secret\r\n\r\n")
+	_, err = io.WriteString(connection, "GET /responses HTTP/1.1\r\nHost: proxy.test\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nX-Codex-Authorization: Bearer secret\r\n\r\n")
 	if err != nil {
 		t.Fatal(err)
 	}
