@@ -1,0 +1,2 @@
+name=Codex Subscription Proxy
+description=A Go reverse proxy that manages ChatGPT OAuth credentials and forwards authenticated Codex requests for OpenCode-compatible model access.
