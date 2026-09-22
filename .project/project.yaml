@@ -1,0 +1,14 @@
+name: "Codex Subscription Proxy"
+description: "A Go reverse proxy that manages ChatGPT OAuth credentials and forwards authenticated Codex requests for OpenCode-compatible model access."
+topics:
+  - "codex"
+  - "reverse-proxy"
+  - "oauth"
+  - "chatgpt"
+  - "opencode"
+  - "go"
+homepage: "https://codex.sacha.house"
+source:
+  provider: github
+  namespace: "sachahjkl"
+  path: "sachahjkl/ai-api-proxy"
