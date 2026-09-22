@@ -155,12 +155,12 @@ The authenticated `/models` endpoint publishes the mapped Codex manifest. The pu
 | Simulacra model | Upstream model |
 | --- | --- |
 | `grandmaster`: Grandmaster (6 Astra) | `gpt-6-astra` |
-| `master`: Master (5.6 Sol) | `gpt-5.6-sol` |
-| `master-1m`: Master (5.6 Sol, 1M) | `gpt-5.6-sol` |
+| `master`: Master (6 Sol) | `gpt-6-sol` |
+| `master-1m`: Master (6 Sol, 1M) | `gpt-6-sol` |
 | `marshal`: Marshal (5.6 Terra) | `gpt-5.6-terra` |
 | `marshal-1m`: Marshal (5.6 Terra, 1M) | `gpt-5.6-terra` |
-| `commander`: Commander (5.6 Luna) | `gpt-5.6-luna` |
-| `commander-1m`: Commander (5.6 Luna, 1M) | `gpt-5.6-luna` |
+| `commander`: Commander (6 Luna) | `gpt-6-luna` |
+| `commander-1m`: Commander (6 Luna, 1M) | `gpt-6-luna` |
 | `general`: General (5.5) | `gpt-5.5` |
 | `captain`: Captain (5.4) | `gpt-5.4` |
 | `scout`: Scout (5.4 Mini) | `gpt-5.4-mini` |

@@ -21,12 +21,12 @@ type modelAlias struct {
 
 var modelAliases = map[string]modelAlias{
 	"grandmaster":  {Name: "Grandmaster (6 Astra)", Upstream: "gpt-6-astra", NativeLimits: true},
-	"master":       {Name: "Master (5.6 Sol)", Upstream: "gpt-5.6-sol"},
-	"master-1m":    {Name: "Master (5.6 Sol, 1M)", Upstream: "gpt-5.6-sol", LongContext: true},
+	"master":       {Name: "Master (6 Sol)", Upstream: "gpt-6-sol"},
+	"master-1m":    {Name: "Master (6 Sol, 1M)", Upstream: "gpt-6-sol", LongContext: true},
 	"marshal":      {Name: "Marshal (5.6 Terra)", Upstream: "gpt-5.6-terra"},
 	"marshal-1m":   {Name: "Marshal (5.6 Terra, 1M)", Upstream: "gpt-5.6-terra", LongContext: true},
-	"commander":    {Name: "Commander (5.6 Luna)", Upstream: "gpt-5.6-luna"},
-	"commander-1m": {Name: "Commander (5.6 Luna, 1M)", Upstream: "gpt-5.6-luna", LongContext: true},
+	"commander":    {Name: "Commander (6 Luna)", Upstream: "gpt-6-luna"},
+	"commander-1m": {Name: "Commander (6 Luna, 1M)", Upstream: "gpt-6-luna", LongContext: true},
 	"general":      {Name: "General (5.5)", Upstream: "gpt-5.5"},
 	"captain":      {Name: "Captain (5.4)", Upstream: "gpt-5.4"},
 	"scout":        {Name: "Scout (5.4 Mini)", Upstream: "gpt-5.4-mini"},

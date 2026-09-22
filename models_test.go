@@ -11,9 +11,11 @@ import (
 
 func TestRewriteRequestModel(t *testing.T) {
 	models := map[string]string{
-		"grandmaster": "gpt-6-astra",
-		"master":      "gpt-5.6-sol",
-		"master-1m":   "gpt-5.6-sol",
+		"grandmaster":  "gpt-6-astra",
+		"master":       "gpt-6-sol",
+		"master-1m":    "gpt-6-sol",
+		"commander":    "gpt-6-luna",
+		"commander-1m": "gpt-6-luna",
 	}
 	for model, upstream := range models {
 		t.Run(model, func(t *testing.T) {
@@ -47,7 +49,8 @@ func TestRewriteModelsResponse(t *testing.T) {
 		Header:     make(http.Header),
 		Body: io.NopCloser(strings.NewReader(`{"models":[
 			{"slug":"gpt-6-astra","display_name":"GPT-6 Astra","supported_reasoning_levels":[{"effort":"max"}]},
-			{"slug":"gpt-5.6-sol","display_name":"GPT-5.6 Sol","supported_reasoning_levels":[{"effort":"max"}]},
+			{"slug":"gpt-6-sol","display_name":"GPT-6 Sol","supported_reasoning_levels":[{"effort":"max"}]},
+			{"slug":"gpt-6-luna","display_name":"GPT-6 Luna","supported_reasoning_levels":[{"effort":"high"}]},
 			{"slug":"gpt-5.6-terra","display_name":"GPT-5.6 Terra","supported_reasoning_levels":[{"effort":"high"}]},
 			{"slug":"gpt-reserve","display_name":"GPT Reserve"}
 		]}`)),
@@ -67,7 +70,7 @@ func TestRewriteModelsResponse(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&catalog); err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog.Models) != 5 {
+	if len(catalog.Models) != 7 {
 		t.Fatalf("models = %#v", catalog.Models)
 	}
 	models := make(map[string]struct {
@@ -84,11 +87,14 @@ func TestRewriteModelsResponse(t *testing.T) {
 			Effort string
 		}{Name: model.DisplayName, Effort: effort}
 	}
-	if models["master"].Name != "Master (5.6 Sol)" || models["master"].Effort != "max" {
+	if models["master"].Name != "Master (6 Sol)" || models["master"].Effort != "max" {
 		t.Fatalf("master = %#v", models["master"])
 	}
-	if models["master-1m"].Name != "Master (5.6 Sol, 1M)" || models["master-1m"].Effort != "max" {
+	if models["master-1m"].Name != "Master (6 Sol, 1M)" || models["master-1m"].Effort != "max" {
 		t.Fatalf("long-context master = %#v", models["master-1m"])
+	}
+	if models["commander"].Name != "Commander (6 Luna)" || models["commander"].Effort != "high" || models["commander-1m"].Name != "Commander (6 Luna, 1M)" {
+		t.Fatalf("commander models = %#v", models)
 	}
 	if models["marshal"].Name != "Marshal (5.6 Terra)" || models["marshal-1m"].Name != "Marshal (5.6 Terra, 1M)" {
 		t.Fatalf("marshal models = %#v", models)

@@ -68,18 +68,26 @@ func TestAddSimulacraCatalog(t *testing.T) {
 		t.Fatalf("provider = %#v", simulacra)
 	}
 	master := simulacra.Models["master"]
-	if master.ID != "master" || master.Name != "Master (5.6 Sol)" || len(master.ReasoningOptions[0].Values) != 2 || len(master.Experimental) != 0 {
+	if master.ID != "master" || master.Name != "Master (6 Sol)" || len(master.ReasoningOptions[0].Values) != 2 || len(master.Experimental) != 0 {
 		t.Fatalf("master = %#v", master)
 	}
 	if master.Limit.Context != 400_000 || master.Limit.Input != 272_000 || master.Limit.Output != 100 {
 		t.Fatalf("master limits = %#v", master.Limit)
 	}
 	longMaster := simulacra.Models["master-1m"]
-	if longMaster.ID != "master-1m" || longMaster.Name != "Master (5.6 Sol, 1M)" {
+	if longMaster.ID != "master-1m" || longMaster.Name != "Master (6 Sol, 1M)" {
 		t.Fatalf("long-context master = %#v", longMaster)
 	}
 	if longMaster.Limit.Context != 1_000_000 || longMaster.Limit.Input != 872_000 || longMaster.Limit.Output != 100 {
 		t.Fatalf("long-context master limits = %#v", longMaster.Limit)
+	}
+	commander := simulacra.Models["commander"]
+	if commander.ID != "commander" || commander.Name != "Commander (6 Luna)" || commander.Limit.Context != 400_000 {
+		t.Fatalf("commander = %#v", commander)
+	}
+	longCommander := simulacra.Models["commander-1m"]
+	if longCommander.ID != "commander-1m" || longCommander.Name != "Commander (6 Luna, 1M)" || longCommander.Limit.Context != 1_000_000 {
+		t.Fatalf("long-context commander = %#v", longCommander)
 	}
 	grandmaster := simulacra.Models["grandmaster"]
 	if grandmaster.ID != "grandmaster" || grandmaster.Name != "Grandmaster (6 Astra)" {
